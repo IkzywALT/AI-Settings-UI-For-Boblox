@@ -731,338 +731,44 @@ local Icons = (function()
 	local Icon = {}
 	Icon.__index = Icon
 
-	local GRID = 24
-	local STROKE = 2
 	local registry = {}
-	local definitions = {}
+	local aliases = {
+		close = "x",
+	}
+	local provider = nil
 
-	local function polar(cx, cy, radius, degrees)
-		local radians = math.rad(degrees)
-		return cx + radius * math.cos(radians), cy + radius * math.sin(radians)
+	local loaded, result = pcall(function()
+		return loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"))()
+	end)
+	if loaded and type(result) == "table" then
+		provider = result
+		pcall(function()
+			provider.SetIconsType("lucide")
+		end)
+	else
+		warn("[PhaseLib] Failed to load IconsV2: " .. tostring(result))
 	end
 
-	local function line(x1, y1, x2, y2, thickness)
-		return { "line", x1, y1, x2, y2, thickness or STROKE }
+	local function isDirect(value)
+		return string.find(value, "^rbxasset") ~= nil or string.find(value, "^https?://") ~= nil
 	end
 
-	local function circle(cx, cy, radius, fill)
-		return { "circle", cx, cy, radius, fill }
-	end
-
-	local function rect(x, y, width, height, radius, fill)
-		return { "rect", x, y, width, height, radius or 0, fill }
-	end
-
-	local function arc(cx, cy, radius, from, to)
-		return { "arc", cx, cy, radius, from, to }
-	end
-
-	local function polygon(points)
-		local shapes = {}
-		for index = 1, #points do
-			local first = points[index]
-			local second = points[index % #points + 1]
-			table.insert(shapes, line(first[1], first[2], second[1], second[2]))
+	local function resolve(name)
+		if not provider then
+			return nil
 		end
-		return shapes
-	end
-
-	definitions.settings = function()
-		local shapes = { circle(12, 12, 6.2), circle(12, 12, 2.4) }
-		for index = 0, 7 do
-			local x1, y1 = polar(12, 12, 7.8, index * 45)
-			local x2, y2 = polar(12, 12, 10.4, index * 45)
-			table.insert(shapes, line(x1, y1, x2, y2, 3.2))
+		local success, icon = pcall(provider.GetIcon, aliases[name] or name)
+		if success and icon ~= nil then
+			return icon
 		end
-		return shapes
+		return nil
 	end
 
-	definitions.user = function()
-		return {
-			circle(12, 8, 4),
-			arc(12, 21, 7, 180, 360),
-			line(5, 21, 19, 21),
-		}
-	end
-
-	definitions.shield = function()
-		local shapes = polygon({
-			{ 12, 2.5 },
-			{ 19, 5.5 },
-			{ 19, 12 },
-			{ 12, 21.5 },
-			{ 5, 12 },
-			{ 5, 5.5 },
-		})
-		table.insert(shapes, circle(12, 11.5, 2.2))
-		return shapes
-	end
-
-	definitions.bell = function()
-		return {
-			arc(12, 10, 6, 180, 360),
-			line(6, 10, 6, 15),
-			line(18, 10, 18, 15),
-			line(6, 15, 4, 17.5),
-			line(18, 15, 20, 17.5),
-			line(4, 17.5, 20, 17.5),
-			arc(12, 18, 2, 0, 180),
-			line(12, 3.5, 12, 5),
-		}
-	end
-
-	definitions.monitor = function()
-		return {
-			rect(3, 4.5, 18, 12, 2),
-			line(12, 16.5, 12, 20),
-			line(8, 20, 16, 20),
-		}
-	end
-
-	definitions.gauge = function()
-		return {
-			arc(12, 14, 9, 160, 380),
-			line(12, 14, 16.5, 8.5),
-			circle(12, 14, 1.3, true),
-		}
-	end
-
-	definitions.chip = function()
-		local shapes = {
-			rect(6, 6, 12, 12, 2),
-			rect(9.5, 9.5, 5, 5, 1),
-		}
-		for _, offset in ipairs({ 9, 15 }) do
-			table.insert(shapes, line(offset, 3, offset, 6))
-			table.insert(shapes, line(offset, 18, offset, 21))
-			table.insert(shapes, line(3, offset, 6, offset))
-			table.insert(shapes, line(18, offset, 21, offset))
+	function Icons.SetType(iconType)
+		if not provider then
+			return false
 		end
-		return shapes
-	end
-
-	definitions.keyboard = function()
-		local shapes = { rect(2.5, 6, 19, 12, 2) }
-		for _, x in ipairs({ 6.5, 10, 14, 17.5 }) do
-			table.insert(shapes, circle(x, 9.7, 0.95, true))
-			table.insert(shapes, circle(x, 12.7, 0.95, true))
-		end
-		table.insert(shapes, line(8, 15.5, 16, 15.5))
-		return shapes
-	end
-
-	definitions.clock = function()
-		return {
-			circle(12, 12, 9),
-			line(12, 7, 12, 12),
-			line(12, 12, 15.5, 14),
-		}
-	end
-
-	definitions.code = function()
-		return {
-			line(8.5, 7, 3.5, 12),
-			line(3.5, 12, 8.5, 17),
-			line(15.5, 7, 20.5, 12),
-			line(20.5, 12, 15.5, 17),
-		}
-	end
-
-	definitions.grid = function()
-		return {
-			rect(4, 4, 6.5, 6.5, 2),
-			rect(13.5, 4, 6.5, 6.5, 2),
-			rect(4, 13.5, 6.5, 6.5, 2),
-			rect(13.5, 13.5, 6.5, 6.5, 2),
-		}
-	end
-
-	definitions.wrench = function()
-		return {
-			line(5, 19, 12.5, 11.5, 2.6),
-			circle(16.5, 7.5, 4.4),
-		}
-	end
-
-	definitions.puzzle = function()
-		return {
-			rect(4, 9, 13, 12, 2),
-			circle(10.5, 6, 2.4),
-			circle(19.5, 15, 2.4),
-		}
-	end
-
-	definitions.search = function()
-		return {
-			circle(10.5, 10.5, 6.5),
-			line(15.5, 15.5, 20.5, 20.5),
-		}
-	end
-
-	definitions.close = function()
-		return {
-			line(6, 6, 18, 18),
-			line(18, 6, 6, 18),
-		}
-	end
-
-	definitions.check = function()
-		return {
-			line(5, 12.5, 10, 17.5),
-			line(10, 17.5, 19, 7.5),
-		}
-	end
-
-	definitions["chevron-down"] = function()
-		return {
-			line(6, 9, 12, 15),
-			line(12, 15, 18, 9),
-		}
-	end
-
-	definitions.sun = function()
-		local shapes = { circle(12, 12, 4) }
-		for index = 0, 7 do
-			local x1, y1 = polar(12, 12, 7, index * 45)
-			local x2, y2 = polar(12, 12, 9.6, index * 45)
-			table.insert(shapes, line(x1, y1, x2, y2))
-		end
-		return shapes
-	end
-
-	definitions.moon = function()
-		return {
-			arc(12, 12, 9, 0, 270),
-			arc(16.5, 7.5, 6.364, 225, 45),
-		}
-	end
-
-	definitions.grip = function()
-		return {
-			line(8, 20, 20, 8, 1.6),
-			line(14, 20, 20, 14, 1.6),
-		}
-	end
-
-	definitions.account = definitions.user
-	definitions.privacy = definitions.shield
-	definitions.notifications = definitions.bell
-	definitions.appearance = definitions.monitor
-	definitions.performance = definitions.gauge
-	definitions.memory = definitions.chip
-	definitions.shortcuts = definitions.keyboard
-	definitions.time = definitions.clock
-	definitions.advanced = definitions.code
-	definitions.skills = definitions.grid
-	definitions.developer = definitions.wrench
-	definitions.plugins = definitions.puzzle
-
-	local function addLine(container, parts, scale, color, x1, y1, x2, y2, thickness)
-		local width = thickness * scale
-		local dx = (x2 - x1) * scale
-		local dy = (y2 - y1) * scale
-		local length = math.sqrt(dx * dx + dy * dy)
-		local frame = Utility.Create("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset((x1 + x2) / 2 * scale, (y1 + y2) / 2 * scale),
-			Size = UDim2.fromOffset(length + width, width),
-			Rotation = math.deg(math.atan2(dy, dx)),
-			BackgroundColor3 = color,
-			BackgroundTransparency = 0,
-			Parent = container,
-		})
-		Utility.Create("UICorner", {
-			CornerRadius = UDim.new(0.5, 0),
-			Parent = frame,
-		})
-		table.insert(parts, { Instance = frame, Property = "BackgroundColor3" })
-	end
-
-	local function addCircle(container, parts, scale, color, cx, cy, radius, fill)
-		local thickness = STROKE * scale
-		local diameter = radius * 2 * scale
-		local frame = Utility.Create("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(cx * scale, cy * scale),
-			Parent = container,
-		})
-		Utility.Create("UICorner", {
-			CornerRadius = UDim.new(1, 0),
-			Parent = frame,
-		})
-		if fill then
-			frame.Size = UDim2.fromOffset(diameter, diameter)
-			frame.BackgroundColor3 = color
-			frame.BackgroundTransparency = 0
-			table.insert(parts, { Instance = frame, Property = "BackgroundColor3" })
-		else
-			local inner = math.max(diameter - thickness, 1)
-			frame.Size = UDim2.fromOffset(inner, inner)
-			local stroke = Utility.Create("UIStroke", {
-				Thickness = thickness,
-				Color = color,
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-				Parent = frame,
-			})
-			table.insert(parts, { Instance = stroke, Property = "Color" })
-		end
-	end
-
-	local function addRect(container, parts, scale, color, x, y, width, height, radius, fill)
-		local thickness = STROKE * scale
-		local pixelWidth = width * scale
-		local pixelHeight = height * scale
-		local frame = Utility.Create("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset((x + width / 2) * scale, (y + height / 2) * scale),
-			Parent = container,
-		})
-		Utility.Create("UICorner", {
-			CornerRadius = UDim.new(0, radius * scale),
-			Parent = frame,
-		})
-		if fill then
-			frame.Size = UDim2.fromOffset(pixelWidth, pixelHeight)
-			frame.BackgroundColor3 = color
-			frame.BackgroundTransparency = 0
-			table.insert(parts, { Instance = frame, Property = "BackgroundColor3" })
-		else
-			frame.Size = UDim2.fromOffset(math.max(pixelWidth - thickness, 1), math.max(pixelHeight - thickness, 1))
-			local stroke = Utility.Create("UIStroke", {
-				Thickness = thickness,
-				Color = color,
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-				Parent = frame,
-			})
-			table.insert(parts, { Instance = stroke, Property = "Color" })
-		end
-	end
-
-	local function addArc(container, parts, scale, color, cx, cy, radius, from, to)
-		local steps = math.max(2, math.ceil(math.abs(to - from) / 15))
-		local previousX, previousY = polar(cx, cy, radius, from)
-		for step = 1, steps do
-			local angle = from + (to - from) * step / steps
-			local nextX, nextY = polar(cx, cy, radius, angle)
-			addLine(container, parts, scale, color, previousX, previousY, nextX, nextY, STROKE)
-			previousX, previousY = nextX, nextY
-		end
-	end
-
-	local function renderShapes(container, parts, size, color, shapes)
-		local scale = size / GRID
-		for _, shape in ipairs(shapes) do
-			local kind = shape[1]
-			if kind == "line" then
-				addLine(container, parts, scale, color, shape[2], shape[3], shape[4], shape[5], shape[6])
-			elseif kind == "circle" then
-				addCircle(container, parts, scale, color, shape[2], shape[3], shape[4], shape[5])
-			elseif kind == "rect" then
-				addRect(container, parts, scale, color, shape[2], shape[3], shape[4], shape[5], shape[6], shape[7])
-			elseif kind == "arc" then
-				addArc(container, parts, scale, color, shape[2], shape[3], shape[4], shape[5], shape[6])
-			end
-		end
+		return (pcall(provider.SetIconsType, iconType))
 	end
 
 	function Icons.Register(name, value)
@@ -1070,7 +776,10 @@ local Icons = (function()
 	end
 
 	function Icons.Has(name)
-		return registry[name] ~= nil or definitions[name] ~= nil
+		if registry[name] ~= nil then
+			return true
+		end
+		return resolve(name) ~= nil
 	end
 
 	function Icons.Create(parent, icon, size, color)
@@ -1091,31 +800,28 @@ local Icons = (function()
 		if type(value) == "number" then
 			value = "rbxassetid://" .. tostring(value)
 		end
+		if type(value) == "string" and not isDirect(value) then
+			value = resolve(value)
+		end
 
+		local properties = nil
 		if type(value) == "string" then
-			local definition = definitions[value]
-			if definition then
-				renderShapes(container, self._parts, size, color, definition())
-			elseif string.find(value, "^rbxasset") or string.find(value, "^https?://") then
-				local image = Utility.Create("ImageLabel", {
-					Size = UDim2.fromScale(1, 1),
-					Image = value,
-					ImageColor3 = color,
-					ScaleType = Enum.ScaleType.Fit,
-					Parent = container,
-				})
-				table.insert(self._parts, { Instance = image, Property = "ImageColor3" })
-			end
+			properties = { Image = value }
 		elseif type(value) == "table" and value.Image then
-			local image = Utility.Create("ImageLabel", {
-				Size = UDim2.fromScale(1, 1),
+			properties = {
 				Image = value.Image,
 				ImageRectOffset = value.ImageRectOffset or Vector2.zero,
 				ImageRectSize = value.ImageRectSize or Vector2.zero,
-				ImageColor3 = color,
-				ScaleType = Enum.ScaleType.Fit,
-				Parent = container,
-			})
+			}
+		end
+
+		if properties then
+			properties.Name = "Image"
+			properties.Size = UDim2.fromScale(1, 1)
+			properties.ImageColor3 = color
+			properties.ScaleType = Enum.ScaleType.Fit
+			properties.Parent = container
+			local image = Utility.Create("ImageLabel", properties)
 			table.insert(self._parts, { Instance = image, Property = "ImageColor3" })
 		end
 
@@ -4253,6 +3959,10 @@ local Library = (function()
 		Icons.Register(name, icon)
 	end
 
+	function Library:SetIconsType(iconType)
+		return Icons.SetType(iconType)
+	end
+
 	function Library:RegisterComponent(name, module)
 		assert(type(module) == "table" and type(module.new) == "function", "Component modules must expose a new(section, config) function")
 		Section.RegisterComponent(name, module)
@@ -4276,364 +3986,3 @@ local Library = (function()
 
 	return Library
 end)()
-
-if script.ClassName == "ModuleScript" then
-	return Library
-end
-
-local function runDemo()
-	local window = Library:CreateWindow({
-		Title = "Settings",
-		Size = UDim2.fromOffset(1100, 760),
-		Theme = "Dark",
-		Draggable = true,
-		Resizable = false,
-		ToggleKey = Enum.KeyCode.RightControl,
-	})
-
-	local general = window:CreateTab({ Name = "General", Icon = "settings", Group = "Preferences" })
-	local account = window:CreateTab({ Name = "Account", Icon = "user", Group = "Preferences" })
-	local privacy = window:CreateTab({ Name = "Privacy", Icon = "shield", Group = "Preferences" })
-	local notifications = window:CreateTab({ Name = "Notifications", Icon = "bell", Group = "Preferences" })
-	local appearance = window:CreateTab({ Name = "Appearance", Icon = "monitor", Group = "Preferences" })
-	local performance = window:CreateTab({ Name = "Performance", Icon = "gauge", Group = "Preferences" })
-	local memory = window:CreateTab({ Name = "Memory", Icon = "chip", Group = "Preferences" })
-	local shortcuts = window:CreateTab({ Name = "Shortcuts", Icon = "keyboard", Group = "Preferences" })
-	local focus = window:CreateTab({ Name = "Time & Focus", Icon = "clock", Group = "Preferences" })
-	local advanced = window:CreateTab({ Name = "Advanced", Icon = "code", Group = "Preferences" })
-	local skills = window:CreateTab({ Name = "Skills", Icon = "grid", Group = "Customization" })
-	local developer = window:CreateTab({ Name = "Developer", Icon = "wrench", Group = "Customization" })
-	local plugins = window:CreateTab({ Name = "Plugins", Icon = "puzzle", Group = "Customization" })
-
-	local themeDropdown
-	local themeSwitch = general:CreateSegmented({
-		Options = {
-			{ Value = "System", Icon = "monitor" },
-			{ Value = "Light", Icon = "sun" },
-			{ Value = "Dark", Icon = "moon" },
-		},
-		Default = "Dark",
-		Callback = function(value)
-			Library:SetTheme(value == "System" and "Dark" or value)
-			themeDropdown:Set(value, true)
-		end,
-	})
-
-	local appearanceSection = general:CreateSection({ Name = "Appearance" })
-	themeDropdown = appearanceSection:CreateDropdown({
-		Name = "Theme",
-		Options = { "Dark", "Light", "Midnight", "System" },
-		Default = "Dark",
-		Callback = function(value)
-			Library:SetTheme(value == "System" and "Dark" or value)
-			themeSwitch:Set(value, true)
-		end,
-	})
-	appearanceSection:CreateDropdown({
-		Name = "Font style",
-		Options = { "Default", "Rounded", "Mono" },
-		Default = "Default",
-	})
-	appearanceSection:CreateDropdown({
-		Name = "Font size",
-		Options = { "Small", "Medium", "Large" },
-		Default = "Medium",
-	})
-	appearanceSection:CreateDropdown({
-		Name = "Text language",
-		Options = { "English", "Indonesian", "Spanish", "French", "German", "Japanese" },
-		Default = "English",
-	})
-	appearanceSection:CreateDropdown({
-		Name = "Text direction",
-		Options = { "Left to right", "Right to left" },
-		Default = "Left to right",
-	})
-
-	local soundSection = general:CreateSection({ Name = "Sound" })
-	soundSection:CreateDropdown({
-		Name = "Volume",
-		Options = { "0%", "25%", "50%", "75%", "100%" },
-		Default = "100%",
-	})
-	soundSection:CreateDropdown({
-		Name = "Language",
-		Options = { "English", "Indonesian", "Japanese" },
-		Default = "Indonesian",
-	})
-	soundSection:CreateDropdown({
-		Name = "Voice",
-		Options = { "Male", "Female" },
-		Default = "Male",
-	})
-	soundSection:CreateDropdown({
-		Name = "Music",
-		Options = { "Normal", "Calm", "Off" },
-		Default = "Normal",
-	})
-
-	local notificationSection = general:CreateSection({ Name = "Notifications" })
-	notificationSection:CreateToggle({
-		Name = "Enable notifications",
-		Default = true,
-		Callback = function(value)
-			Library:Notify({
-				Title = value and "Notifications enabled" or "Notifications disabled",
-				Content = value and "You will receive application notifications." or "You will no longer be notified.",
-				Type = value and "Success" or "Info",
-				Duration = 3,
-			})
-		end,
-	})
-
-	local profile = account:CreateSection({ Name = "Profile", Description = "How other people see you." })
-	profile:CreateInput({
-		Name = "Username",
-		Placeholder = "Enter username...",
-		MaxLength = 20,
-		Validate = function(text)
-			return string.match(text, "^[%w_]*$") ~= nil
-		end,
-		Callback = function(value)
-			Library:Notify({ Title = "Username updated", Content = value, Type = "Success", Duration = 2.5 })
-		end,
-	})
-	profile:CreateInput({
-		Name = "Display name",
-		Placeholder = "Enter display name...",
-		MaxLength = 32,
-	})
-	profile:CreateDropdown({
-		Name = "Status",
-		Options = { "Online", "Away", "Do not disturb", "Invisible" },
-		Default = "Online",
-	})
-	local session = account:CreateSection({ Name = "Session" })
-	session:CreateButton({
-		Name = "Sign out",
-		Description = "End the current session on this device.",
-		ButtonText = "Sign out",
-		Callback = function()
-			Library:Notify({ Title = "Signed out", Content = "Your session has ended.", Type = "Warning" })
-		end,
-	})
-	session:CreateParagraph({
-		Title = "Tip",
-		Content = "Usernames may contain letters, numbers and underscores. Invalid input is reverted automatically.",
-	})
-
-	local dataSection = privacy:CreateSection({ Name = "Data" })
-	dataSection:CreateToggle({
-		Name = "Share analytics",
-		Description = "Help improve the application by sharing anonymous usage data.",
-		Default = false,
-	})
-	dataSection:CreateToggle({
-		Name = "Personalised content",
-		Default = true,
-	})
-	dataSection:CreateDropdown({
-		Name = "Profile visibility",
-		Options = { "Everyone", "Friends", "Only me" },
-		Default = "Friends",
-	})
-	local historySection = privacy:CreateSection({ Name = "History" })
-	historySection:CreateButton({
-		Name = "Clear history",
-		Description = "Remove recent searches and activity.",
-		ButtonText = "Clear",
-		Callback = function()
-			Library:Notify({ Title = "History cleared", Type = "Success", Duration = 2.5 })
-		end,
-	})
-
-	local alerts = notifications:CreateSection({ Name = "Alerts" })
-	alerts:CreateToggle({ Name = "Direct messages", Default = true })
-	alerts:CreateToggle({ Name = "Mentions", Default = true })
-	alerts:CreateToggle({ Name = "System updates", Default = false })
-	alerts:CreateDropdown({
-		Name = "Delivery",
-		Options = { "Immediately", "Hourly digest", "Daily digest" },
-		Default = "Immediately",
-	})
-
-	local interface = appearance:CreateSection({ Name = "Interface" })
-	interface:CreateSlider({
-		Name = "Interface opacity",
-		Min = 50,
-		Max = 100,
-		Default = 100,
-		Suffix = "%",
-	})
-	interface:CreateToggle({ Name = "Reduce motion", Default = false })
-	interface:CreateToggle({ Name = "Compact layout", Default = false })
-
-	local graphics = performance:CreateSection({ Name = "Graphics" })
-	graphics:CreateSlider({
-		Name = "Frame rate limit",
-		Min = 30,
-		Max = 240,
-		Increment = 10,
-		Default = 60,
-		Suffix = " FPS",
-	})
-	graphics:CreateSlider({
-		Name = "Graphics quality",
-		Min = 1,
-		Max = 10,
-		Default = 7,
-	})
-	graphics:CreateToggle({
-		Name = "Hardware acceleration",
-		Description = "Use the GPU for rendering when available.",
-		Default = true,
-	})
-	local network = performance:CreateSection({ Name = "Network" })
-	network:CreateDropdown({
-		Name = "Region",
-		Options = { "Automatic", "North America", "Europe", "Asia" },
-		Default = "Automatic",
-	})
-	network:CreateSlider({
-		Name = "Bandwidth limit",
-		Min = 10,
-		Max = 200,
-		Increment = 10,
-		Default = 100,
-		Suffix = " Mbps",
-	})
-
-	local cache = memory:CreateSection({ Name = "Cache" })
-	cache:CreateSlider({
-		Name = "Cache size",
-		Min = 128,
-		Max = 2048,
-		Increment = 64,
-		Default = 512,
-		Suffix = " MB",
-	})
-	cache:CreateButton({
-		Name = "Clear cache",
-		ButtonText = "Clear",
-		Callback = function()
-			Library:Notify({ Title = "Cache cleared", Content = "Freed 312 MB.", Type = "Success" })
-		end,
-	})
-	cache:CreateParagraph({
-		Title = "Memory usage",
-		Content = "Cached assets are stored locally to speed up loading. Clearing the cache never removes your settings.",
-	})
-
-	local keys = shortcuts:CreateSection({ Name = "Keyboard" })
-	keys:CreateKeybind({
-		Name = "Toggle UI",
-		Default = Enum.KeyCode.RightControl,
-		Callback = function(key)
-			window:SetToggleKey(key)
-			Library:Notify({ Title = "Shortcut updated", Content = "Toggle UI is now bound to " .. key.Name .. ".", Duration = 2.5 })
-		end,
-	})
-	keys:CreateKeybind({
-		Name = "Quick notification",
-		Default = Enum.KeyCode.N,
-		OnPressed = function()
-			Library:Notify({ Title = "Quick notification", Content = "Triggered from a keybind.", Duration = 2 })
-		end,
-	})
-
-	local timer = focus:CreateSection({ Name = "Focus session" })
-	timer:CreateToggle({ Name = "Focus mode", Description = "Silence notifications during a session.", Default = false })
-	timer:CreateSlider({
-		Name = "Session length",
-		Min = 5,
-		Max = 120,
-		Increment = 5,
-		Default = 25,
-		Suffix = " min",
-	})
-	timer:CreateSlider({
-		Name = "Break length",
-		Min = 1,
-		Max = 30,
-		Default = 5,
-		Suffix = " min",
-	})
-
-	local system = advanced:CreateSection({ Name = "System" })
-	system:CreateLabel({ Text = "Changes in this section take effect immediately." })
-	system:CreateToggle({ Name = "Developer mode", Default = false })
-	system:CreateInput({
-		Name = "Custom endpoint",
-		Placeholder = "https://",
-		Width = 260,
-	})
-	system:CreateButton({
-		Name = "Reset settings",
-		Description = "Restore default settings.",
-		ButtonText = "Reset",
-		Callback = function()
-			Library:Notify({ Title = "Settings reset", Content = "Defaults have been restored.", Type = "Warning" })
-		end,
-	})
-
-	local catalog = skills:CreateSection({ Name = "Installed" })
-	catalog:CreateParagraph({
-		Title = "No skills installed",
-		Content = "Skills extend what the application can do. Installed skills will appear here.",
-	})
-
-	local tools = developer:CreateSection({ Name = "Notifications" })
-	for _, kind in ipairs({ "Info", "Success", "Warning", "Error" }) do
-		tools:CreateButton({
-			Name = kind .. " notification",
-			ButtonText = "Show",
-			Callback = function()
-				Library:Notify({
-					Title = kind,
-					Content = "This is a " .. string.lower(kind) .. " notification.",
-					Type = kind,
-					Duration = 3,
-				})
-			end,
-		})
-	end
-	local themes = developer:CreateSection({ Name = "Themes" })
-	themes:CreateButton({
-		Name = "Midnight theme",
-		ButtonText = "Apply",
-		Callback = function()
-			Library:SetTheme("Midnight")
-			themeDropdown:Set("Midnight", true)
-		end,
-	})
-	themes:CreateButton({
-		Name = "Custom theme",
-		Description = "Applies a custom palette through Library:SetTheme.",
-		ButtonText = "Apply",
-		Callback = function()
-			Library:SetTheme({
-				Background = Color3.fromRGB(20, 22, 28),
-				Window = Color3.fromRGB(24, 27, 34),
-				Sidebar = Color3.fromRGB(21, 23, 30),
-				Surface = Color3.fromRGB(36, 40, 50),
-				Hover = Color3.fromRGB(46, 51, 63),
-				Selected = Color3.fromRGB(58, 65, 82),
-				Text = Color3.fromRGB(236, 240, 247),
-				Border = Color3.fromRGB(50, 56, 70),
-				Accent = Color3.fromRGB(140, 180, 255),
-				ToggleOn = Color3.fromRGB(70, 110, 190),
-			})
-		end,
-	})
-
-	local extensions = plugins:CreateSection({ Name = "Extensions" })
-	extensions:CreateToggle({ Name = "Auto-update plugins", Default = true })
-	extensions:CreateParagraph({
-		Title = "Plugins",
-		Content = "Plugins add optional features. Disable any plugin you do not use to keep the application fast.",
-	})
-
-	return window
-end
-
-runDemo()
