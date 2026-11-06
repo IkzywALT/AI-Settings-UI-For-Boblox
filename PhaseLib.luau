@@ -1,1 +1,4024 @@
-local Constants=(function()local Constants={}Constants.Version="1.0.0"Constants.Fonts={Regular=Font.fromEnum(Enum.Font.BuilderSans),Medium=Font.fromEnum(Enum.Font.BuilderSansMedium),SemiBold=Font.fromEnum(Enum.Font.BuilderSansBold),Bold=Font.fromEnum(Enum.Font.BuilderSansExtraBold),}Constants.Durations={Hover=0.12,Press=0.10,Toggle=0.18,Dropdown=0.20,Window=0.25,Tab=0.18,Theme=0.20,Notification=0.25,}Constants.Metrics={WindowRadius=14,ControlRadius=8,PopupRadius=10,TopBarHeight=56,SidebarWidth=236,SidebarCompactWidth=188,CompactBreakpoint=760,MinWindowSize=Vector2.new(480,320),ScreenFraction=0.96,SearchHeight=38,NavItemHeight=38,NavHeaderHeight=30,PagePadding=28,PageHeaderHeight=72,RowHeight=50,RowPadding=12,ControlHeight=34,ToggleWidth=46,ToggleHeight=26,OptionHeight=32,PopupMaxOptions=6,PopupPadding=4,NotificationWidth=320,NotificationMax=5,}Constants.TextSizes={Title=20,PageTitle=22,Body=15,Small=13,Header=15,Control=14,}return Constants end)()local Janitor=(function()local Janitor={}Janitor.__index=Janitor local function cleanItem(item)local kind=typeof(item)if kind=="RBXScriptConnection"then item:Disconnect()elseif kind=="Instance"then item:Destroy()elseif kind=="function"then item()elseif kind=="thread"then pcall(task.cancel,item)elseif kind=="table"then if type(item.Destroy)=="function"then item:Destroy()elseif type(item.Disconnect)=="function"then item:Disconnect()end end end function Janitor.new()return setmetatable({_items={},_destroyed=false},Janitor)end function Janitor:Add(item)if self._destroyed then cleanItem(item)return item end table.insert(self._items,item)return item end function Janitor:Connect(signal,callback)return self:Add(signal:Connect(callback))end function Janitor:Cleanup()local items=self._items self._items={}for index=#items,1,-1 do cleanItem(items[index])end end function Janitor:Destroy()self._destroyed=true self:Cleanup()end return Janitor end)()local Animation=(function()local TweenService=game:GetService("TweenService")local Animation={}local styles={Toggle=Enum.EasingStyle.Quart,Dropdown=Enum.EasingStyle.Quart,Window=Enum.EasingStyle.Quart,Notification=Enum.EasingStyle.Quart,}local infos={}for name,duration in pairs(Constants.Durations)do infos[name]=TweenInfo.new(duration,styles[name]or Enum.EasingStyle.Quad,Enum.EasingDirection.Out)end function Animation.Info(preset)if typeof(preset)=="TweenInfo"then return preset end return infos[preset]or infos.Hover end function Animation.Tween(instance,preset,properties)local tween=TweenService:Create(instance,Animation.Info(preset),properties)tween:Play()return tween end function Animation.Set(instance,preset,properties,animated)if animated then return Animation.Tween(instance,preset,properties)end for property,value in pairs(properties)do instance[property]=value end return nil end return Animation end)()local Utility=(function()local Players=game:GetService("Players")local UserInputService=game:GetService("UserInputService")local Utility={}local textClasses={TextLabel=true,TextButton=true,TextBox=true,}local defaults={Frame={BorderSizePixel=0,BackgroundTransparency=1,},CanvasGroup={BorderSizePixel=0,BackgroundTransparency=1,},TextLabel={BorderSizePixel=0,BackgroundTransparency=1,Text="",TextSize=Constants.TextSizes.Body,TextXAlignment=Enum.TextXAlignment.Left,},TextButton={BorderSizePixel=0,BackgroundTransparency=1,AutoButtonColor=false,Text="",TextSize=Constants.TextSizes.Body,},TextBox={BorderSizePixel=0,BackgroundTransparency=1,Text="",ClearTextOnFocus=false,TextSize=Constants.TextSizes.Body,TextXAlignment=Enum.TextXAlignment.Left,},ImageLabel={BorderSizePixel=0,BackgroundTransparency=1,},ImageButton={BorderSizePixel=0,BackgroundTransparency=1,AutoButtonColor=false,},ScrollingFrame={BorderSizePixel=0,BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=4,ScrollingDirection=Enum.ScrollingDirection.Y,VerticalScrollBarInset=Enum.ScrollBarInset.None,},}function Utility.Create(className,properties,children)local instance=Instance.new(className)local classDefaults=defaults[className]if classDefaults then for property,value in pairs(classDefaults)do instance[property]=value end end if textClasses[className]then instance.FontFace=Constants.Fonts.Regular end local parent=nil if properties then for property,value in pairs(properties)do if property=="Parent"then parent=value else instance[property]=value end end end if children then for _,child in ipairs(children)do child.Parent=instance end end if parent then instance.Parent=parent end return instance end function Utility.Corner(parent,radius)return Utility.Create("UICorner",{CornerRadius=UDim.new(0,radius),Parent=parent,})end function Utility.Stroke(parent,thickness,transparency)return Utility.Create("UIStroke",{Thickness=thickness or 1,Transparency=transparency or 0,ApplyStrokeMode=Enum.ApplyStrokeMode.Border,Parent=parent,})end function Utility.Padding(parent,top,right,bottom,left)return Utility.Create("UIPadding",{PaddingTop=UDim.new(0,top or 0),PaddingRight=UDim.new(0,right or 0),PaddingBottom=UDim.new(0,bottom or 0),PaddingLeft=UDim.new(0,left or 0),Parent=parent,})end function Utility.List(parent,padding,options)local layout=Instance.new("UIListLayout")layout.SortOrder=Enum.SortOrder.LayoutOrder layout.Padding=UDim.new(0,padding or 0)if options then for property,value in pairs(options)do layout[property]=value end end layout.Parent=parent return layout end function Utility.Merge(base,overrides)local result={}for key,value in pairs(base)do result[key]=value end if overrides then for key,value in pairs(overrides)do result[key]=value end end return result end function Utility.Round(value,step)step=step or 1 if step<=0 then return value end local rounded=math.floor(value/step+0.5)*step return tonumber(string.format("%.6f",rounded))end function Utility.FormatNumber(value)local text=string.format("%.4f",value)text=string.gsub(text,"0+$","")text=string.gsub(text,"%.$","")return text end function Utility.Normalize(text)local lowered=string.lower(tostring(text or ""))lowered=string.gsub(lowered,"^%s+","")lowered=string.gsub(lowered,"%s+$","")return lowered end function Utility.Contains(haystack,needle)return string.find(string.lower(tostring(haystack or "")),needle,1,true)~=nil end function Utility.KeyName(keyCode)if keyCode==nil or keyCode==Enum.KeyCode.Unknown then return "None"end local spaced=string.gsub(keyCode.Name,"(%l)(%u)","%1 %2")return spaced end function Utility.SafeCall(callback,.. .)if type(callback)=="function"then task.spawn(callback,.. .)end end function Utility.GetGuiParent()local player=Players.LocalPlayer assert(player,"RobloxUI must be required from a client script")return player:WaitForChild("PlayerGui")end function Utility.IsPrimaryInput(input)return input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch end function Utility.Interact(button,janitor,handlers)local pressing=false janitor:Add(button.MouseEnter:Connect(function()if handlers.Hover then handlers.Hover(true)end end))janitor:Add(button.MouseLeave:Connect(function()if handlers.Hover then handlers.Hover(false)end if pressing then pressing=false if handlers.Press then handlers.Press(false)end end end))janitor:Add(button.InputBegan:Connect(function(input)if Utility.IsPrimaryInput(input)then pressing=true if handlers.Press then handlers.Press(true)end end end))janitor:Add(button.InputEnded:Connect(function(input)if not Utility.IsPrimaryInput(input)then return end if pressing then pressing=false if handlers.Press then handlers.Press(false)end end if input.UserInputType==Enum.UserInputType.Touch and handlers.Hover then handlers.Hover(false)end end))if handlers.Click then janitor:Add(button.Activated:Connect(function()handlers.Click()end))end end function Utility.Drag(handle,janitor,callbacks)local active=false local origin=Vector2.zero janitor:Add(handle.InputBegan:Connect(function(input)if active or not Utility.IsPrimaryInput(input)then return end active=true origin=Vector2.new(input.Position.X,input.Position.Y)if callbacks.Began then callbacks.Began(origin)end end))janitor:Add(UserInputService.InputChanged:Connect(function(input)if not active then return end if input.UserInputType~=Enum.UserInputType.MouseMovement and input.UserInputType~=Enum.UserInputType.Touch then return end local position=Vector2.new(input.Position.X,input.Position.Y)if callbacks.Changed then callbacks.Changed(position,position-origin)end end))janitor:Add(UserInputService.InputEnded:Connect(function(input)if not active or not Utility.IsPrimaryInput(input)then return end active=false if callbacks.Ended then callbacks.Ended()end end))end return Utility end)()local ThemeManager=(function()local ThemeManager={}ThemeManager.__index=ThemeManager local Scope={}Scope.__index=Scope local palettes={Dark={Background="#17181B",Window="#1C1D21",Sidebar="#191A1E",Surface="#25262B",Hover="#303137",Selected="#3A3B41",Border="#35363B",Text="#F2F2F3",TextSecondary="#A3A4AA",TextMuted="#777980",Accent="#FFFFFF",AccentText="#17181B",ToggleOn="#5A5B62",ToggleOff="#303137",KnobOn="#FFFFFF",KnobOff="#9A9BA2",Success="#5CC98A",Warning="#E6B450",Error="#E86464",Info="#78A0E6",},Light={Background="#F2F2F5",Window="#FFFFFF",Sidebar="#F6F6F8",Surface="#F0F0F3",Hover="#E8E8EC",Selected="#DFDFE5",Border="#E2E2E7",Text="#17181B",TextSecondary="#5E5F67",TextMuted="#8C8D95",Accent="#17181B",AccentText="#FFFFFF",ToggleOn="#2C2D32",ToggleOff="#D5D5DB",KnobOn="#FFFFFF",KnobOff="#FFFFFF",Success="#2E9E62",Warning="#C48A1A",Error="#D04444",Info="#3E6FD0",},Midnight={Background="#08090C",Window="#0D0E13",Sidebar="#0A0B0F",Surface="#161820",Hover="#1F212B",Selected="#292C38",Border="#242733",Text="#EDEEF3",TextSecondary="#9799A6",TextMuted="#666878",Accent="#FFFFFF",AccentText="#0D0E13",ToggleOn="#4A4F6A",ToggleOff="#1F212B",KnobOn="#FFFFFF",KnobOff="#8C8EA0",Success="#5CC98A",Warning="#E6B450",Error="#E86464",Info="#78A0E6",},}local function normalize(colors)local result={}for key,value in pairs(colors)do if typeof(value)=="string"then result[key]=Color3.fromHex(value)elseif typeof(value)=="Color3"then result[key]=value end end return result end local function copy(source)local result={}for key,value in pairs(source)do result[key]=value end return result end function Scope.new(manager,parent)local self=setmetatable({},Scope)self._manager=manager self._parent=parent self._bindings={}self._watchers={}self._children={}self._destroyed=false manager._scopes[self]=true return self end function Scope:Colors()return self._manager._colors end function Scope:Get(key)return self._manager._colors[key]end function Scope:Bind(instance,properties)if self._destroyed then return instance end local colors=self._manager._colors for property,key in pairs(properties)do local color=colors[key]assert(color,"Unknown theme key: "..tostring(key))instance[property]=color end table.insert(self._bindings,{Instance=instance,Properties=properties})return instance end function Scope:Watch(callback)if self._destroyed then return function()end end table.insert(self._watchers,callback)callback(self._manager._colors,false)return function()local index=table.find(self._watchers,callback)if index then table.remove(self._watchers,index)end end end function Scope:Child()local child=Scope.new(self._manager,self)self._children[child]=true return child end function Scope:_apply(colors,animated)for _,binding in ipairs(self._bindings)do local goals={}for property,key in pairs(binding.Properties)do goals[property]=colors[key]end Animation.Set(binding.Instance,"Theme",goals,animated)end for _,watcher in ipairs(self._watchers)do watcher(colors,animated)end end function Scope:Destroy()if self._destroyed then return end self._destroyed=true for child in pairs(self._children)do child:Destroy()end self._children={}self._bindings={}self._watchers={}self._manager._scopes[self]=nil if self._parent then self._parent._children[self]=nil end end function ThemeManager.new()local self=setmetatable({},ThemeManager)self._themes={}for name,palette in pairs(palettes)do self._themes[name]=normalize(palette)end self._themes.Custom=copy(self._themes.Dark)self._name="Dark"self._colors=self._themes.Dark self._scopes={}self._listeners={}return self end function ThemeManager:GetName()return self._name end function ThemeManager:GetColors()return self._colors end function ThemeManager:GetNames()local names={}for name in pairs(self._themes)do table.insert(names,name)end table.sort(names)return names end function ThemeManager:RegisterTheme(name,colors)local theme=copy(self._themes.Dark)for key,value in pairs(normalize(colors))do theme[key]=value end self._themes[name]=theme return theme end function ThemeManager:Set(theme)local name local colors if type(theme)=="string"then colors=self._themes[theme]assert(colors,"Unknown theme: "..theme)name=theme elseif type(theme)=="table"then colors=copy(self._colors)for key,value in pairs(normalize(theme))do colors[key]=value end self._themes.Custom=colors name="Custom"else error("Theme must be a theme name or a table of colors")end self._name=name self._colors=colors local snapshot={}for scope in pairs(self._scopes)do table.insert(snapshot,scope)end for _,scope in ipairs(snapshot)do if not scope._destroyed then scope:_apply(colors,true)end end for _,listener in ipairs(self._listeners)do task.spawn(listener,name,colors)end end function ThemeManager:OnChanged(callback)table.insert(self._listeners,callback)return function()local index=table.find(self._listeners,callback)if index then table.remove(self._listeners,index)end end end function ThemeManager:CreateScope()return Scope.new(self,nil)end return ThemeManager end)()local Icons=(function()local Icons={}local Icon={}Icon.__index=Icon local registry={}local aliases={close="x",}local provider=nil local loaded,result=pcall(function()return loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"))()end)if loaded and type(result)=="table"then provider=result pcall(function()provider.SetIconsType("lucide")end)else warn("[PhaseLib] Failed to load IconsV2: "..tostring(result))end local function isDirect(value)return string.find(value,"^rbxasset")~=nil or string.find(value,"^https?://")~=nil end local function resolve(name)if not provider then return nil end local success,icon=pcall(provider.GetIcon,aliases[name]or name)if success and icon~=nil then return icon end return nil end function Icons.SetType(iconType)if not provider then return false end return(pcall(provider.SetIconsType,iconType))end function Icons.Register(name,value)registry[name]=value end function Icons.Has(name)if registry[name]~=nil then return true end return resolve(name)~=nil end function Icons.Create(parent,icon,size,color)size=size or 18 color=color or Color3.new(1,1,1)local container=Utility.Create("Frame",{Name="Icon",Size=UDim2.fromOffset(size,size),Parent=parent,})local self=setmetatable({Frame=container,_parts={}},Icon)local value=icon if type(value)=="string"and registry[value]~=nil then value=registry[value]end if type(value)=="number"then value="rbxassetid://"..tostring(value)end if type(value)=="string"and not isDirect(value)then value=resolve(value)end local properties=nil if type(value)=="string"then properties={Image=value}elseif type(value)=="table"and value.Image then properties={Image=value.Image,ImageRectOffset=value.ImageRectOffset or Vector2.zero,ImageRectSize=value.ImageRectSize or Vector2.zero,}end if properties then properties.Name="Image"properties.Size=UDim2.fromScale(1,1)properties.ImageColor3=color properties.ScaleType=Enum.ScaleType.Fit properties.Parent=container local image=Utility.Create("ImageLabel",properties)table.insert(self._parts,{Instance=image,Property="ImageColor3"})end return self end function Icon:SetColor(color,animated)for _,part in ipairs(self._parts)do Animation.Set(part.Instance,"Hover",{[part.Property]=color},animated)end end function Icon:Destroy()self.Frame:Destroy()end return Icons end)()local Overlay=(function()local UserInputService=game:GetService("UserInputService")local Overlay={}Overlay.__index=Overlay function Overlay.new(root,uiScale,janitor)local self=setmetatable({},Overlay)self.Root=root self.Scale=uiScale self._current=nil self.Layer=Utility.Create("Frame",{Name="Overlay",Size=UDim2.fromScale(1,1),ZIndex=20,Parent=root,})self.Blocker=Utility.Create("TextButton",{Name="Blocker",Position=UDim2.fromOffset(-5000,-5000),Size=UDim2.fromOffset(10000,10000),Visible=false,ZIndex=1,Parent=self.Layer,})janitor:Add(self.Blocker.Activated:Connect(function()self:Dismiss()end))janitor:Add(UserInputService.InputBegan:Connect(function(input)if input.KeyCode==Enum.KeyCode.Escape and self._current then self:Dismiss()end end))return self end function Overlay:IsOpen()return self._current~=nil end function Overlay:Open(owner,anchor,popup,size,gap)self:Dismiss()local scale=math.max(self.Scale.Scale,0.01)local rootPosition=self.Root.AbsolutePosition local bounds=self.Root.AbsoluteSize/scale local anchorPosition=(anchor.AbsolutePosition-rootPosition)/scale local anchorSize=anchor.AbsoluteSize/scale local x=anchorPosition.X+anchorSize.X-size.X x=math.clamp(x,8,math.max(8,bounds.X-size.X-8))local below=anchorPosition.Y+anchorSize.Y+gap local fitsDown=below+size.Y<=bounds.Y-8 local fitsUp=anchorPosition.Y-gap-size.Y>=8 local opensDown=fitsDown or not fitsUp if opensDown then popup.AnchorPoint=Vector2.new(0,0)popup.Position=UDim2.fromOffset(x,below)else popup.AnchorPoint=Vector2.new(0,1)popup.Position=UDim2.fromOffset(x,anchorPosition.Y-gap)end popup.Parent=self.Layer self.Blocker.Visible=true self._current=owner return opensDown and "Down"or "Up"end function Overlay:Release(owner)if self._current==owner then self._current=nil self.Blocker.Visible=false end end function Overlay:Dismiss()local current=self._current if current then self._current=nil self.Blocker.Visible=false current:Close()end end return Overlay end)()local Row=(function()local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Row={}function Row.Build(section,config)local context=section:CreateContext()local scope=context.Scope local janitor=context.Janitor local name=config.Name or "Row"local description=config.Description local controlWidth=config.ControlWidth or 0 local frame=Utility.Create("Frame",{Name=name,Size=UDim2.new(1,0,0,Metrics.RowHeight),LayoutOrder=section:NextOrder(),Parent=section.Container,})local reserve=0 if controlWidth>0 then reserve=controlWidth+20 end local column=Utility.Create("Frame",{Name="Text",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.fromScale(0,0.5),Size=UDim2.new(1,-reserve,0,0),AutomaticSize=Enum.AutomaticSize.Y,Parent=frame,})Utility.List(column,2)local title=Utility.Create("TextLabel",{Name="Title",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,Text=name,TextSize=TextSizes.Body,TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,LayoutOrder=1,Parent=column,})scope:Bind(title,{TextColor3="Text"})local descriptionLabel=Utility.Create("TextLabel",{Name="Description",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,Text=description or "",TextSize=TextSizes.Small,TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,Visible=description~=nil and description~="",LayoutOrder=2,Parent=column,})scope:Bind(descriptionLabel,{TextColor3="TextSecondary"})local control=nil if controlWidth>0 then control=Utility.Create("Frame",{Name="Control",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.fromScale(1,0.5),Size=UDim2.new(0,controlWidth,1,0),Parent=frame,})end local separator=Utility.Create("Frame",{Name="Separator",AnchorPoint=Vector2.new(0,1),Position=UDim2.fromScale(0,1),Size=UDim2.new(1,0,0,1),BackgroundTransparency=0.3,Parent=frame,})scope:Bind(separator,{BackgroundColor3="Border"})local shield=Utility.Create("TextButton",{Name="Shield",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false,ZIndex=10,Parent=frame,})scope:Bind(shield,{BackgroundColor3="Window"})local function measure()local needed=column.AbsoluteSize.Y+Metrics.RowPadding*2 frame.Size=UDim2.new(1,0,0,math.max(Metrics.RowHeight,needed))end janitor:Add(column:GetPropertyChangedSignal("AbsoluteSize"):Connect(measure))task.defer(measure)section:AddEntry(frame,name.." "..(description or ""))return{Frame=frame,Title=title,Description=descriptionLabel,Control=control,Separator=separator,Shield=shield,Janitor=janitor,Scope=scope,Disabled=false,}end function Row.SetDisabled(refs,disabled)refs.Disabled=disabled local shield=refs.Shield if disabled then shield.Visible=true Animation.Tween(shield,"Hover",{BackgroundTransparency=0.45})else local tween=Animation.Tween(shield,"Hover",{BackgroundTransparency=1})tween.Completed:Once(function()if not refs.Disabled then shield.Visible=false end end)end end function Row.SetTitle(refs,text)refs.Title.Text=text end function Row.SetDescription(refs,text)refs.Description.Text=text or ""refs.Description.Visible=text~=nil and text~=""end return Row end)()local Navigation=(function()local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Navigation={}Navigation.__index=Navigation function Navigation.new(window,parent,onSelect)local self=setmetatable({},Navigation)self.Window=window self.Scope=window.Scope self.Janitor=window.Janitor self.Items={}self.Groups={}self.Selected=nil self._onSelect=onSelect self._focused=false local scope=self.Scope local janitor=self.Janitor local searchTop=14 local listTop=searchTop+Metrics.SearchHeight+10 self.SearchFrame=Utility.Create("Frame",{Name="Search",Position=UDim2.fromOffset(12,searchTop),Size=UDim2.new(1,-24,0,Metrics.SearchHeight),BackgroundTransparency=0,Parent=parent,})scope:Bind(self.SearchFrame,{BackgroundColor3="Surface"})Utility.Corner(self.SearchFrame,10)self._searchStroke=Utility.Stroke(self.SearchFrame,1)self._searchIcon=Icons.Create(self.SearchFrame,"search",16,Color3.new(1,1,1))self._searchIcon.Frame.AnchorPoint=Vector2.new(0,0.5)self._searchIcon.Frame.Position=UDim2.new(0,12,0.5,0)self.SearchBox=Utility.Create("TextBox",{Name="Input",Position=UDim2.fromOffset(38,0),Size=UDim2.new(1,-50,1,0),PlaceholderText="Search…",TextSize=TextSizes.Body,Parent=self.SearchFrame,})scope:Bind(self.SearchBox,{TextColor3="Text",PlaceholderColor3="TextMuted"})self.Scroll=Utility.Create("ScrollingFrame",{Name="Items",Position=UDim2.fromOffset(0,listTop),Size=UDim2.new(1,0,1,-listTop),ScrollBarThickness=3,Parent=parent,})scope:Bind(self.Scroll,{ScrollBarImageColor3="Selected"})Utility.Padding(self.Scroll,4,12,14,12)Utility.List(self.Scroll,2)self.Empty=Utility.Create("TextLabel",{Name="Empty",Size=UDim2.new(1,0,0,40),Text="No results",TextSize=TextSizes.Control,TextXAlignment=Enum.TextXAlignment.Center,Visible=false,LayoutOrder=1000000,Parent=self.Scroll,})scope:Bind(self.Empty,{TextColor3="TextMuted"})local function renderSearch(animated)local colors=scope:Colors()local strokeColor=colors.Border local iconColor=colors.TextMuted if self._focused then strokeColor=colors.TextMuted iconColor=colors.TextSecondary end Animation.Set(self._searchStroke,"Hover",{Color=strokeColor},animated)self._searchIcon:SetColor(iconColor,animated)end janitor:Add(self.SearchBox.Focused:Connect(function()self._focused=true renderSearch(true)end))janitor:Add(self.SearchBox.FocusLost:Connect(function(enterPressed)self._focused=false renderSearch(true)if enterPressed then self:_selectFirstVisible()end end))janitor:Add(self.SearchBox:GetPropertyChangedSignal("Text"):Connect(function()self:Search(self.SearchBox.Text)end))scope:Watch(function(_,animated)renderSearch(animated)for _,item in ipairs(self.Items)do self:_render(item,animated)end end)return self end function Navigation:_group(name)name=name or ""for _,group in ipairs(self.Groups)do if group.Name==name then return group end end local scope=self.Scope local index=#self.Groups+1 local group={Name=name,Index=index,Items={}}if index>1 then local separator=Utility.Create("Frame",{Name="Separator",Size=UDim2.new(1,0,0,19),LayoutOrder=index*1000-1,Parent=self.Scroll,})local lineFrame=Utility.Create("Frame",{AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,6,0.5,0),Size=UDim2.new(1,-12,0,1),BackgroundTransparency=0,Parent=separator,})scope:Bind(lineFrame,{BackgroundColor3="Border"})group.Separator=separator end if name~=""then local header=Utility.Create("TextLabel",{Name="Header_"..name,Size=UDim2.new(1,0,0,Metrics.NavHeaderHeight),Text=name,FontFace=Constants.Fonts.Medium,TextSize=TextSizes.Control,LayoutOrder=index*1000,Parent=self.Scroll,})Utility.Padding(header,0,0,0,6)scope:Bind(header,{TextColor3="TextMuted"})group.Header=header end self.Groups[index]=group return group end function Navigation:AddItem(config)local group=self:_group(config.Group)local order=group.Index*1000+#group.Items+1 local hasIcon=config.Icon~=nil local button=Utility.Create("TextButton",{Name=config.Name,Size=UDim2.new(1,0,0,Metrics.NavItemHeight),BackgroundTransparency=1,LayoutOrder=order,Parent=self.Scroll,})Utility.Corner(button,Metrics.ControlRadius)local item={Name=config.Name,Page=config.Page,Group=group,Button=button,Selected=false,Hovered=false,Pressed=false,Visible=true,}if hasIcon then item.Icon=Icons.Create(button,config.Icon,18,Color3.new(1,1,1))item.Icon.Frame.AnchorPoint=Vector2.new(0,0.5)item.Icon.Frame.Position=UDim2.new(0,12,0.5,0)end local labelOffset=hasIcon and 42 or 14 item.Label=Utility.Create("TextLabel",{Name="Label",Position=UDim2.fromOffset(labelOffset,0),Size=UDim2.new(1,-(labelOffset+8),1,0),Text=config.Name,TextSize=TextSizes.Body,TextTruncate=Enum.TextTruncate.AtEnd,Parent=button,})table.insert(group.Items,item)table.insert(self.Items,item)Utility.Interact(button,self.Janitor,{Hover=function(state)item.Hovered=state self:_render(item,true)end,Press=function(state)item.Pressed=state self:_render(item,true)end,Click=function()self:Select(item)end,})self:_render(item,false)return item end function Navigation:_render(item,animated)local colors=self.Scope:Colors()local background=colors.Hover local transparency=1 local foreground=colors.Text:Lerp(colors.TextSecondary,0.4)if item.Selected then background=colors.Selected transparency=0 foreground=colors.Text elseif item.Pressed then background=colors.Hover:Lerp(colors.Selected,0.5)transparency=0 foreground=colors.Text elseif item.Hovered then background=colors.Hover transparency=0 foreground=colors.Text end Animation.Set(item.Button,"Hover",{BackgroundColor3=background,BackgroundTransparency=transparency,},animated)Animation.Set(item.Label,"Hover",{TextColor3=foreground},animated)if item.Icon then item.Icon:SetColor(foreground,animated)end end function Navigation:Select(item)if self.Selected==item then return end local previous=self.Selected self.Selected=item if previous then previous.Selected=false self:_render(previous,true)end item.Selected=true self:_render(item,previous~=nil)if self._onSelect then self._onSelect(item,previous)end end function Navigation:_selectFirstVisible()for _,group in ipairs(self.Groups)do for _,item in ipairs(group.Items)do if item.Visible then self:Select(item)return end end end end function Navigation:Search(rawQuery)local query=Utility.Normalize(rawQuery)local any=false for _,item in ipairs(self.Items)do local match=query==""or Utility.Contains(item.Name,query)or item.Page:HasMatch(query)item.Visible=match item.Button.Visible=match item.Page:Filter(query)if match then any=true end end local shownBefore=false for _,group in ipairs(self.Groups)do local groupVisible=false for _,item in ipairs(group.Items)do if item.Visible then groupVisible=true break end end if group.Header then group.Header.Visible=groupVisible end if group.Separator then group.Separator.Visible=groupVisible and shownBefore end if groupVisible then shownBefore=true end end self.Empty.Visible=not any if self.Selected and not self.Selected.Visible then self:_selectFirstVisible()end end return Navigation end)()local Segmented=(function()local TextSizes=Constants.TextSizes local Segmented={}Segmented.__index=Segmented local function normalizeOptions(options)local result={}for _,option in ipairs(options)do if type(option)=="table"then table.insert(result,{Value=option.Value,Text=option.Text,Icon=option.Icon,})else table.insert(result,{Value=option,Text=tostring(option)})end end return result end local function build(tab,config,options)local padding=4 local segmentHeight=32 local segmentWidth=44 for _,option in ipairs(options)do if not option.Icon then segmentWidth=76 end end local refs={Padding=padding,SegmentWidth=segmentWidth,SegmentHeight=segmentHeight,Segments={}}refs.Frame=Utility.Create("Frame",{Name="Segmented",Size=UDim2.fromOffset(#options*segmentWidth+padding*2,segmentHeight+padding*2),BackgroundTransparency=0,LayoutOrder=tab:NextOrder(),Parent=tab.HeaderControls,})Utility.Corner(refs.Frame,12)refs.Stroke=Utility.Stroke(refs.Frame,1)refs.Indicator=Utility.Create("Frame",{Name="Indicator",Position=UDim2.fromOffset(padding,padding),Size=UDim2.fromOffset(segmentWidth,segmentHeight),BackgroundTransparency=0,Parent=refs.Frame,})Utility.Corner(refs.Indicator,9)for index,option in ipairs(options)do local button=Utility.Create("TextButton",{Name=tostring(option.Value),Position=UDim2.fromOffset(padding+(index-1)*segmentWidth,padding),Size=UDim2.fromOffset(segmentWidth,segmentHeight),Parent=refs.Frame,})local segment={Button=button,Option=option,Hover=false}if option.Icon then segment.Icon=Icons.Create(button,option.Icon,18,Color3.new(1,1,1))segment.Icon.Frame.AnchorPoint=Vector2.new(0.5,0.5)segment.Icon.Frame.Position=UDim2.fromScale(0.5,0.5)else segment.Label=Utility.Create("TextLabel",{Size=UDim2.fromScale(1,1),Text=option.Text or tostring(option.Value),TextSize=TextSizes.Control,TextXAlignment=Enum.TextXAlignment.Center,Parent=button,})end refs.Segments[index]=segment end return refs end function Segmented.new(tab,config)config=Utility.Merge({Options={}},config)local options=normalizeOptions(config.Options)local context=tab:CreateContext()local refs=build(tab,config,options)local self=setmetatable({},Segmented)self.Frame=refs.Frame self.Options=options self.Value=config.Default self._refs=refs self._context=context self._callback=config.Callback if self.Value==nil and options[1]then self.Value=options[1].Value end context.Scope:Bind(refs.Frame,{BackgroundColor3="Surface"})context.Scope:Bind(refs.Stroke,{Color="Border"})context.Scope:Bind(refs.Indicator,{BackgroundColor3="Selected"})for index,segment in ipairs(refs.Segments)do Utility.Interact(segment.Button,context.Janitor,{Hover=function(state)segment.Hover=state self:_renderSegments(true)end,Click=function()self:Set(options[index].Value)end,})end context.Scope:Watch(function(_,animated)self:_renderSegments(animated)end)self:_moveIndicator(false)return self end function Segmented:_indexOf(value)for index,option in ipairs(self.Options)do if option.Value==value then return index end end return nil end function Segmented:_moveIndicator(animated)local index=self:_indexOf(self.Value)if not index then self._refs.Indicator.Visible=false return end self._refs.Indicator.Visible=true local x=self._refs.Padding+(index-1)*self._refs.SegmentWidth Animation.Set(self._refs.Indicator,"Toggle",{Position=UDim2.fromOffset(x,self._refs.Padding)},animated)end function Segmented:_renderSegments(animated)local colors=self._context.Scope:Colors()for _,segment in ipairs(self._refs.Segments)do local selected=segment.Option.Value==self.Value local color=colors.TextSecondary if selected or segment.Hover then color=colors.Text end if segment.Icon then segment.Icon:SetColor(color,animated)else Animation.Set(segment.Label,"Hover",{TextColor3=color},animated)end end end function Segmented:Set(value,silent)if value==self.Value or not self:_indexOf(value)then return end self.Value=value self:_moveIndicator(true)self:_renderSegments(true)if not silent then Utility.SafeCall(self._callback,value)end end function Segmented:Get()return self.Value end function Segmented:Destroy()self._context.Janitor:Destroy()self._context.Scope:Destroy()self.Frame:Destroy()end return Segmented end)()local Section=(function()local TextSizes=Constants.TextSizes local Section={}Section.__index=Section function Section.new(tab,config)config=Utility.Merge({Name="Section"},config)local self=setmetatable({},Section)self.Tab=tab self.Window=tab.Window self.Janitor=tab.Janitor self.Scope=tab.Scope self.Name=config.Name self._order=0 self._entries={}self._searchName=string.lower(config.Name)local scope=self.Scope self.Frame=Utility.Create("Frame",{Name="Section_"..config.Name,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,LayoutOrder=tab:NextOrder(),Parent=tab.Scroll,})Utility.List(self.Frame,0)local header=Utility.Create("Frame",{Name="Header",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,LayoutOrder=1,Parent=self.Frame,})Utility.Padding(header,18,0,0,0)Utility.List(header,6)local title=Utility.Create("TextLabel",{Name="Title",Size=UDim2.new(1,0,0,20),Text=config.Name,FontFace=Constants.Fonts.SemiBold,TextSize=TextSizes.Header,LayoutOrder=1,Parent=header,})scope:Bind(title,{TextColor3="TextSecondary"})local hasDescription=config.Description~=nil and config.Description~=""self.DescriptionLabel=Utility.Create("TextLabel",{Name="Description",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,Text=config.Description or "",TextSize=TextSizes.Small,TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,Visible=hasDescription,LayoutOrder=2,Parent=header,})scope:Bind(self.DescriptionLabel,{TextColor3="TextMuted"})local line=Utility.Create("Frame",{Name="Line",Size=UDim2.new(1,0,0,1),BackgroundTransparency=0,LayoutOrder=3,Parent=header,})scope:Bind(line,{BackgroundColor3="Border"})self.Container=Utility.Create("Frame",{Name="Container",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,LayoutOrder=2,Parent=self.Frame,})Utility.List(self.Container,0)return self end function Section.RegisterComponent(name,module)Section["Create"..name]=function(self,config)return module.new(self,config or{})end end function Section:NextOrder()self._order=self._order+1 return self._order end function Section:CreateContext()return self.Tab:CreateContext()end function Section:AddEntry(frame,terms)table.insert(self._entries,{Frame=frame,Terms=string.lower(terms)})end function Section:HasMatch(query)if string.find(self._searchName,query,1,true)then return true end for _,entry in ipairs(self._entries)do if string.find(entry.Terms,query,1,true)then return true end end return false end function Section:Filter(query,forceShow)local sectionMatch=forceShow or query==""or string.find(self._searchName,query,1,true)~=nil local any=false for _,entry in ipairs(self._entries)do local show=sectionMatch or string.find(entry.Terms,query,1,true)~=nil entry.Frame.Visible=show if show then any=true end end self.Frame.Visible=any or sectionMatch end function Section:SetDescription(text)self.DescriptionLabel.Text=text or ""self.DescriptionLabel.Visible=text~=nil and text~=""end function Section:Destroy()self.Frame:Destroy()end return Section end)()local Tab=(function()local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Tab={}Tab.__index=Tab function Tab.new(window,config)config=Utility.Merge({Name="Tab"},config)local self=setmetatable({},Tab)self.Window=window self.Janitor=window.Janitor self.Scope=window.Scope self.Name=config.Name self.Sections={}self._order=0 self._searchName=string.lower(config.Name)local scope=self.Scope local padding=Metrics.PagePadding local hasDescription=config.Description~=nil and config.Description~=""self.Page=Utility.Create("CanvasGroup",{Name="Page_"..config.Name,Size=UDim2.fromScale(1,1),GroupTransparency=1,Visible=false,Parent=window.Content,})self.Header=Utility.Create("Frame",{Name="Header",Size=UDim2.new(1,0,0,Metrics.PageHeaderHeight),Parent=self.Page,})self.TitleLabel=Utility.Create("TextLabel",{Name="Title",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,padding,0.5,hasDescription and-10 or 0),Size=UDim2.new(1,-(padding*2+180),0,28),Text=config.Title or config.Name,FontFace=Constants.Fonts.SemiBold,TextSize=TextSizes.PageTitle,TextTruncate=Enum.TextTruncate.AtEnd,Parent=self.Header,})scope:Bind(self.TitleLabel,{TextColor3="Text"})self.DescriptionLabel=Utility.Create("TextLabel",{Name="Description",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,padding,0.5,14),Size=UDim2.new(1,-(padding*2+180),0,18),Text=config.Description or "",TextSize=TextSizes.Small,TextTruncate=Enum.TextTruncate.AtEnd,Visible=hasDescription,Parent=self.Header,})scope:Bind(self.DescriptionLabel,{TextColor3="TextSecondary"})self.HeaderControls=Utility.Create("Frame",{Name="Controls",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.new(1,-padding,0.5,0),Size=UDim2.new(),AutomaticSize=Enum.AutomaticSize.XY,Parent=self.Header,})Utility.List(self.HeaderControls,8,{FillDirection=Enum.FillDirection.Horizontal,VerticalAlignment=Enum.VerticalAlignment.Center,HorizontalAlignment=Enum.HorizontalAlignment.Right,})self.Scroll=Utility.Create("ScrollingFrame",{Name="Scroll",Position=UDim2.fromOffset(0,Metrics.PageHeaderHeight),Size=UDim2.new(1,0,1,-Metrics.PageHeaderHeight),Parent=self.Page,})scope:Bind(self.Scroll,{ScrollBarImageColor3="Selected"})Utility.Padding(self.Scroll,0,padding,24,padding)Utility.List(self.Scroll,0)self.Item=window.Navigation:AddItem({Name=config.Name,Icon=config.Icon,Group=config.Group,Page=self,})return self end function Tab:NextOrder()self._order=self._order+1 return self._order end function Tab:CreateContext()local janitor=Janitor.new()local scope=self.Scope:Child()self.Janitor:Add(janitor)janitor:Add(scope)return{Janitor=janitor,Scope=scope}end function Tab:CreateSection(config)local section=Section.new(self,config)table.insert(self.Sections,section)return section end function Tab:CreateSegmented(config)return Segmented.new(self,config or{})end function Tab:SetTitle(text)self.TitleLabel.Text=text end function Tab:SetDescription(text)self.DescriptionLabel.Text=text or ""self.DescriptionLabel.Visible=text~=nil and text~=""self.TitleLabel.Position=UDim2.new(0,Metrics.PagePadding,0.5,self.DescriptionLabel.Visible and-10 or 0)end function Tab:Select()self.Window:SelectTab(self)end function Tab:Show(animated)self.Page.Visible=true if animated then self.Page.GroupTransparency=1 self.Page.Position=UDim2.fromOffset(0,8)Animation.Tween(self.Page,"Tab",{GroupTransparency=0,Position=UDim2.fromOffset(0,0),})else self.Page.GroupTransparency=0 self.Page.Position=UDim2.fromOffset(0,0)end end function Tab:Hide()self.Page.Visible=false end function Tab:HasMatch(query)if string.find(self._searchName,query,1,true)then return true end for _,section in ipairs(self.Sections)do if section:HasMatch(query)then return true end end return false end function Tab:Filter(query)local tabMatch=query==""or string.find(self._searchName,query,1,true)~=nil for _,section in ipairs(self.Sections)do section:Filter(query,tabMatch)end end return Tab end)()local Window=(function()local UserInputService=game:GetService("UserInputService")local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Window={}Window.__index=Window function Window.new(library,config)config=Utility.Merge({Title="Application",Size=UDim2.fromOffset(1100,760),Draggable=true,ClampToScreen=false,Resizable=false,ToggleKey=Enum.KeyCode.RightControl,DestroyOnClose=false,Visible=true,},config)local theme=library.Theme if config.Theme~=nil then if type(config.Theme)=="table"or theme:GetName()~=config.Theme then theme:Set(config.Theme)end end local self=setmetatable({},Window)self.Library=library self.Janitor=Janitor.new()self.Scope=theme:CreateScope()self.Janitor:Add(self.Scope)self.Tabs={}self.ActiveTab=nil self._open=false self._token=0 self._offset=Vector2.zero self._listening=false self._compact=nil self._toggleKey=config.ToggleKey self._config=config local scope=self.Scope local janitor=self.Janitor self.Gui=Utility.Create("ScreenGui",{Name="RobloxUI",ResetOnSpawn=false,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,DisplayOrder=100,Parent=config.Parent or Utility.GetGuiParent(),})janitor:Add(self.Gui)local viewport=self:_viewport()local requested=config.Size self._size=Vector2.new(requested.X.Scale*viewport.X+requested.X.Offset,requested.Y.Scale*viewport.Y+requested.Y.Offset)self._current=self._size self.Root=Utility.Create("Frame",{Name="Root",AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),Size=UDim2.fromOffset(self._size.X,self._size.Y),Visible=false,Parent=self.Gui,})self._scale=Utility.Create("UIScale",{Scale=0.96,Parent=self.Root})self.Frame=Utility.Create("CanvasGroup",{Name="Window",Size=UDim2.fromScale(1,1),BackgroundTransparency=0,GroupTransparency=1,ZIndex=1,Parent=self.Root,})scope:Bind(self.Frame,{BackgroundColor3="Window"})Utility.Corner(self.Frame,Metrics.WindowRadius)local outline=Utility.Create("Frame",{Name="Outline",Size=UDim2.fromScale(1,1),ZIndex=2,Parent=self.Root,})Utility.Corner(outline,Metrics.WindowRadius)self._outlineStroke=Utility.Stroke(outline,1,1)scope:Bind(self._outlineStroke,{Color="Border"})self.Overlay=Overlay.new(self.Root,self._scale,janitor)local topBar=Utility.Create("Frame",{Name="TopBar",Size=UDim2.new(1,0,0,Metrics.TopBarHeight),Parent=self.Frame,})local titleX=Metrics.PagePadding if config.Icon~=nil then local logo=Icons.Create(topBar,config.Icon,22,Color3.new(1,1,1))logo.Frame.AnchorPoint=Vector2.new(0,0.5)logo.Frame.Position=UDim2.new(0,Metrics.PagePadding,0.5,0)titleX=Metrics.PagePadding+32 scope:Watch(function(colors,animated)logo:SetColor(colors.Text,animated)end)end self.TitleLabel=Utility.Create("TextLabel",{Name="Title",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,titleX,0.5,0),Size=UDim2.new(1,-(titleX+70),0,28),Text=config.Title,FontFace=Constants.Fonts.SemiBold,TextSize=TextSizes.Title,TextTruncate=Enum.TextTruncate.AtEnd,Parent=topBar,})scope:Bind(self.TitleLabel,{TextColor3="Text"})local topLine=Utility.Create("Frame",{Name="Line",AnchorPoint=Vector2.new(0,1),Position=UDim2.fromScale(0,1),Size=UDim2.new(1,0,0,1),BackgroundTransparency=0,Parent=topBar,})scope:Bind(topLine,{BackgroundColor3="Border"})local closeButton=Utility.Create("TextButton",{Name="Close",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.new(1,-18,0.5,0),Size=UDim2.fromOffset(34,34),Parent=topBar,})Utility.Corner(closeButton,Metrics.ControlRadius)local closeScale=Utility.Create("UIScale",{Parent=closeButton})local closeIcon=Icons.Create(closeButton,"close",18,Color3.new(1,1,1))closeIcon.Frame.AnchorPoint=Vector2.new(0.5,0.5)closeIcon.Frame.Position=UDim2.fromScale(0.5,0.5)local closeState={Hover=false,Press=false}local function renderClose(animated)local colors=scope:Colors()local background=colors.Hover if closeState.Press then background=colors.Selected end local active=closeState.Hover or closeState.Press Animation.Set(closeButton,"Hover",{BackgroundColor3=background,BackgroundTransparency=active and 0 or 1,},animated)closeIcon:SetColor(active and colors.Text or colors.TextSecondary,animated)Animation.Set(closeScale,"Press",{Scale=closeState.Press and 0.9 or 1},animated)end Utility.Interact(closeButton,janitor,{Hover=function(state)closeState.Hover=state renderClose(true)end,Press=function(state)closeState.Press=state renderClose(true)end,Click=function()self:Close()end,})scope:Watch(function(_,animated)renderClose(animated)end)local body=Utility.Create("Frame",{Name="Body",Position=UDim2.fromOffset(0,Metrics.TopBarHeight),Size=UDim2.new(1,0,1,-Metrics.TopBarHeight),Parent=self.Frame,})self.Sidebar=Utility.Create("Frame",{Name="Sidebar",Size=UDim2.new(0,Metrics.SidebarWidth,1,0),BackgroundTransparency=0,Parent=body,})scope:Bind(self.Sidebar,{BackgroundColor3="Sidebar"})self.Divider=Utility.Create("Frame",{Name="Divider",Position=UDim2.new(0,Metrics.SidebarWidth,0,0),Size=UDim2.new(0,1,1,0),BackgroundTransparency=0,Parent=body,})scope:Bind(self.Divider,{BackgroundColor3="Border"})self.Content=Utility.Create("Frame",{Name="Content",Position=UDim2.new(0,Metrics.SidebarWidth+1,0,0),Size=UDim2.new(1,-(Metrics.SidebarWidth+1),1,0),ClipsDescendants=true,Parent=body,})self.Navigation=Navigation.new(self,self.Sidebar,function(item,previous)self.Overlay:Dismiss()if previous and previous.Page then previous.Page:Hide()end item.Page:Show(previous~=nil)self.ActiveTab=item.Page end)if config.Draggable then local startOffset=Vector2.zero Utility.Drag(topBar,janitor,{Began=function()self.Overlay:Dismiss()startOffset=self._offset end,Changed=function(_,delta)self._offset=startOffset+delta self:_clamp()end,})end if config.Resizable then local grip=Utility.Create("TextButton",{Name="Resize",AnchorPoint=Vector2.new(1,1),Position=UDim2.fromScale(1,1),Size=UDim2.fromOffset(22,22),ZIndex=10,Parent=self.Frame,})local gripIcon=Icons.Create(grip,"grip",16,Color3.new(1,1,1))gripIcon.Frame.AnchorPoint=Vector2.new(0.5,0.5)gripIcon.Frame.Position=UDim2.fromScale(0.5,0.5)scope:Watch(function(colors,animated)gripIcon:SetColor(colors.TextMuted,animated)end)local startSize=Vector2.zero local startOffset=Vector2.zero Utility.Drag(grip,janitor,{Began=function()self.Overlay:Dismiss()startSize=self._current startOffset=self._offset end,Changed=function(_,delta)local newSize=Vector2.new(math.max(startSize.X+delta.X,Metrics.MinWindowSize.X),math.max(startSize.Y+delta.Y,Metrics.MinWindowSize.Y))self._size=newSize self._offset=startOffset+(newSize-startSize)/2 self:_fit()end,})end local launcher=config.Launcher if launcher==nil then launcher=UserInputService.TouchEnabled end if launcher then self:_buildLauncher()end janitor:Add(self.Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()self:_fit()end))janitor:Add(UserInputService.InputBegan:Connect(function(input,processed)if processed or self._listening then return end if self._toggleKey~=Enum.KeyCode.Unknown and input.KeyCode==self._toggleKey then self:Toggle()end end))self:_fit()if config.Visible then self:Open()end return self end function Window:_viewport()local size=self.Gui.AbsoluteSize if size.X<1 or size.Y<1 then local camera=workspace.CurrentCamera size=camera and camera.ViewportSize or Vector2.new(1280,720)end return size end function Window:_buildLauncher()local scope=self.Scope self._launcher=Utility.Create("TextButton",{Name="Launcher",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,12,0.5,0),Size=UDim2.fromOffset(44,44),BackgroundTransparency=0,Visible=false,Parent=self.Gui,})scope:Bind(self._launcher,{BackgroundColor3="Surface"})Utility.Corner(self._launcher,12)scope:Bind(Utility.Stroke(self._launcher,1),{Color="Border"})local icon=Icons.Create(self._launcher,"settings",22,Color3.new(1,1,1))icon.Frame.AnchorPoint=Vector2.new(0.5,0.5)icon.Frame.Position=UDim2.fromScale(0.5,0.5)scope:Watch(function(colors,animated)icon:SetColor(colors.Text,animated)end)local moved=false local startPosition=Vector2.zero Utility.Drag(self._launcher,self.Janitor,{Began=function()moved=false local launcher=self._launcher startPosition=launcher.AbsolutePosition-self.Gui.AbsolutePosition launcher.AnchorPoint=Vector2.zero launcher.Position=UDim2.fromOffset(startPosition.X,startPosition.Y)end,Changed=function(_,delta)if not moved and delta.Magnitude<6 then return end moved=true local viewport=self.Gui.AbsoluteSize local launcher=self._launcher local x=math.clamp(startPosition.X+delta.X,0,math.max(viewport.X-launcher.AbsoluteSize.X,0))local y=math.clamp(startPosition.Y+delta.Y,0,math.max(viewport.Y-launcher.AbsoluteSize.Y,0))launcher.Position=UDim2.fromOffset(x,y)end,})self.Janitor:Add(self._launcher.Activated:Connect(function()if moved then return end self:Open()end))end function Window:_applyLayout()local compact=self._current.X<Metrics.CompactBreakpoint if compact==self._compact then return end self._compact=compact local width=compact and Metrics.SidebarCompactWidth or Metrics.SidebarWidth self.Sidebar.Size=UDim2.new(0,width,1,0)self.Divider.Position=UDim2.new(0,width,0,0)self.Content.Position=UDim2.new(0,width+1,0,0)self.Content.Size=UDim2.new(1,-(width+1),1,0)end function Window:_fit()local viewport=self:_viewport()local maxX=viewport.X*Metrics.ScreenFraction local maxY=viewport.Y*Metrics.ScreenFraction local width=math.min(math.max(self._size.X,Metrics.MinWindowSize.X),maxX)local height=math.min(math.max(self._size.Y,Metrics.MinWindowSize.Y),maxY)self._current=Vector2.new(math.floor(width),math.floor(height))self.Root.Size=UDim2.fromOffset(self._current.X,self._current.Y)self:_applyLayout()self:_clamp()end function Window:_clamp()if self._config.ClampToScreen then local viewport=self:_viewport()local halfWidth=self._current.X/2 local halfHeight=self._current.Y/2 local limitX=math.max(viewport.X/2+halfWidth-96,1)local minY=-viewport.Y/2+halfHeight local maxY=math.max(viewport.Y/2-Metrics.TopBarHeight+halfHeight,minY)self._offset=Vector2.new(math.clamp(self._offset.X,-limitX,limitX),math.clamp(self._offset.Y,minY,maxY))end self.Root.Position=UDim2.new(0.5,self._offset.X,0.5,self._offset.Y)end function Window:ResetPosition()self._offset=Vector2.zero self:_clamp()end function Window:CreateTab(config)local tab=Tab.new(self,config or{})table.insert(self.Tabs,tab)if not self.Navigation.Selected then self:SelectTab(tab)end return tab end function Window:SelectTab(tab)self.Navigation:Select(tab.Item)end function Window:Open()if self._open then return end self._open=true self._token=self._token+1 if not self.Root.Visible then self._scale.Scale=0.96 self.Frame.GroupTransparency=1 self._outlineStroke.Transparency=1 self.Root.Visible=true end if self._launcher then self._launcher.Visible=false end Animation.Tween(self._scale,"Window",{Scale=1})Animation.Tween(self.Frame,"Window",{GroupTransparency=0})Animation.Tween(self._outlineStroke,"Window",{Transparency=0})end function Window:Close()if not self._open then return end self._open=false self.Overlay:Dismiss()self._token=self._token+1 local token=self._token Animation.Tween(self._scale,"Window",{Scale=0.96})Animation.Tween(self._outlineStroke,"Window",{Transparency=1})local fade=Animation.Tween(self.Frame,"Window",{GroupTransparency=1})fade.Completed:Once(function()if token==self._token then self.Root.Visible=false end end)if self._launcher then self._launcher.Visible=true end Utility.SafeCall(self._config.OnClose)if self._config.DestroyOnClose then task.delay(Constants.Durations.Window+0.05,function()if token==self._token then self:Destroy()end end)end end function Window:Toggle()if self._open then self:Close()else self:Open()end end function Window:IsOpen()return self._open end function Window:SetTitle(text)self.TitleLabel.Text=text end function Window:SetToggleKey(keyCode)self._toggleKey=keyCode end function Window:GetToggleKey()return self._toggleKey end function Window:SetKeybindListening(state)if state then self._listening=true else task.defer(function()self._listening=false end)end end function Window:Notify(config)return self.Library:Notify(config)end function Window:Destroy()if self._destroyed then return end self._destroyed=true self.Janitor:Destroy()self.Library:_removeWindow(self)end return Window end)()local Notification=(function()local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Notification={}Notification.__index=Notification local typeKeys={info="Info",success="Success",warning="Warning",error="Error",}function Notification.new(theme)local self=setmetatable({},Notification)self.Theme=theme self.Janitor=Janitor.new()self.Scope=theme:CreateScope()self.Janitor:Add(self.Scope)self._active={}self._counter=0 self.Gui=Utility.Create("ScreenGui",{Name="RobloxUI_Notifications",ResetOnSpawn=false,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,DisplayOrder=1000,Parent=Utility.GetGuiParent(),})self.Janitor:Add(self.Gui)self.Holder=Utility.Create("Frame",{Name="Holder",AnchorPoint=Vector2.new(1,1),Position=UDim2.new(1,-20,1,-20),Size=UDim2.new(0,Metrics.NotificationWidth,1,-40),Parent=self.Gui,})Utility.List(self.Holder,0,{VerticalAlignment=Enum.VerticalAlignment.Bottom})return self end function Notification:Push(config)config=Utility.Merge({Title="Notification",Content="",Duration=4,Type="Info",},config)self._counter=self._counter+1 local scope=self.Theme:CreateScope()local typeKey=typeKeys[string.lower(tostring(config.Type))]or "Info"local offscreen=UDim2.fromOffset(Metrics.NotificationWidth+40,0)local wrapper=Utility.Create("Frame",{Name="Toast",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,LayoutOrder=self._counter,Parent=self.Holder,})Utility.Padding(wrapper,0,0,8,0)local toast=Utility.Create("Frame",{Name="Body",Position=offscreen,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=0,Parent=wrapper,})scope:Bind(toast,{BackgroundColor3="Surface"})Utility.Corner(toast,12)scope:Bind(Utility.Stroke(toast,1),{Color="Border"})Utility.Padding(toast,14,16,14,16)Utility.List(toast,4)local header=Utility.Create("Frame",{Name="Header",Size=UDim2.new(1,0,0,18),LayoutOrder=1,Parent=toast,})local dot=Utility.Create("Frame",{Name="Dot",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.fromScale(0,0.5),Size=UDim2.fromOffset(8,8),BackgroundTransparency=0,Parent=header,})Utility.Corner(dot,4)scope:Bind(dot,{BackgroundColor3=typeKey})local title=Utility.Create("TextLabel",{Name="Title",Position=UDim2.fromOffset(16,0),Size=UDim2.new(1,-16,1,0),Text=tostring(config.Title),FontFace=Constants.Fonts.SemiBold,TextSize=TextSizes.Body,TextTruncate=Enum.TextTruncate.AtEnd,Parent=header,})scope:Bind(title,{TextColor3="Text"})local hasContent=config.Content~=nil and config.Content~=""local content=Utility.Create("TextLabel",{Name="Content",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,Text=tostring(config.Content or ""),TextSize=TextSizes.Control,TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,Visible=hasContent,LayoutOrder=2,Parent=toast,})scope:Bind(content,{TextColor3="TextSecondary"})local dismissed=false local handle={}local function dismiss()if dismissed then return end dismissed=true local height=wrapper.AbsoluteSize.Y local slide=Animation.Tween(toast,"Notification",{Position=offscreen})slide.Completed:Once(function()wrapper.AutomaticSize=Enum.AutomaticSize.None wrapper.Size=UDim2.new(1,0,0,height)wrapper.ClipsDescendants=true local collapse=Animation.Tween(wrapper,"Notification",{Size=UDim2.new(1,0,0,0)})collapse.Completed:Once(function()scope:Destroy()wrapper:Destroy()local index=table.find(self._active,handle)if index then table.remove(self._active,index)end end)end)end handle.Dismiss=dismiss table.insert(self._active,handle)toast.InputBegan:Connect(function(input)if Utility.IsPrimaryInput(input)then Utility.SafeCall(config.Callback)dismiss()end end)Animation.Tween(toast,"Notification",{Position=UDim2.fromOffset(0,0)})local duration=tonumber(config.Duration)if duration and duration>0 and duration<math.huge then task.delay(duration,dismiss)end while#self._active>Metrics.NotificationMax do local oldest=table.remove(self._active,1)oldest.Dismiss()end return handle end function Notification:Destroy()self.Janitor:Destroy()end return Notification end)()local Toggle=(function()local Metrics=Constants.Metrics local Toggle={}Toggle.__index=Toggle local function build(section,config)local refs=Row.Build(section,{Name=config.Name,Description=config.Description,ControlWidth=Metrics.ToggleWidth+8,})refs.Track=Utility.Create("TextButton",{Name="Track",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.fromScale(1,0.5),Size=UDim2.fromOffset(Metrics.ToggleWidth,Metrics.ToggleHeight),BackgroundTransparency=0,Parent=refs.Control,})Utility.Corner(refs.Track,Metrics.ToggleHeight/2)refs.Knob=Utility.Create("Frame",{Name="Knob",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,3,0.5,0),Size=UDim2.fromOffset(20,20),BackgroundTransparency=0,Parent=refs.Track,})Utility.Corner(refs.Knob,10)return refs end function Toggle.new(section,config)config=Utility.Merge({Name="Toggle",Default=false,Disabled=false},config)local refs=build(section,config)local self=setmetatable({},Toggle)self.Frame=refs.Frame self.Value=config.Default==true self._refs=refs self._callback=config.Callback self._hover=false self._press=false Utility.Interact(refs.Track,refs.Janitor,{Hover=function(state)self._hover=state self:_render(true)end,Press=function(state)self._press=state self:_render(true)end,Click=function()self:Set(not self.Value)end,})refs.Scope:Watch(function(_,animated)self:_render(animated)end)if config.Disabled then self:SetDisabled(true)end return self end function Toggle:_render(animated)local colors=self._refs.Scope:Colors()local on=self.Value local track=on and colors.ToggleOn or colors.ToggleOff if self._hover then track=track:Lerp(colors.Text,0.1)end local width=self._press and 24 or 20 local x=on and(Metrics.ToggleWidth-3-width)or 3 Animation.Set(self._refs.Track,"Toggle",{BackgroundColor3=track},animated)Animation.Set(self._refs.Knob,"Toggle",{BackgroundColor3=on and colors.KnobOn or colors.KnobOff,Position=UDim2.new(0,x,0.5,0),Size=UDim2.fromOffset(width,20),},animated)end function Toggle:Set(value,silent)value=value==true if value==self.Value then return end self.Value=value self:_render(true)if not silent then Utility.SafeCall(self._callback,value)end end function Toggle:Get()return self.Value end function Toggle:SetDisabled(disabled)Row.SetDisabled(self._refs,disabled)end function Toggle:SetName(text)Row.SetTitle(self._refs,text)end function Toggle:SetDescription(text)Row.SetDescription(self._refs,text)end function Toggle:Destroy()self._refs.Janitor:Destroy()self._refs.Scope:Destroy()self._refs.Frame:Destroy()end return Toggle end)()local Dropdown=(function()local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Dropdown={}Dropdown.__index=Dropdown local function build(section,config)local refs=Row.Build(section,{Name=config.Name,Description=config.Description,ControlWidth=config.Width,})refs.Button=Utility.Create("TextButton",{Name="Button",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.fromScale(1,0.5),Size=UDim2.fromOffset(config.Width,Metrics.ControlHeight),BackgroundTransparency=0,Parent=refs.Control,})Utility.Corner(refs.Button,Metrics.ControlRadius)refs.ButtonStroke=Utility.Stroke(refs.Button,1,0.5)refs.Label=Utility.Create("TextLabel",{Name="Value",Position=UDim2.fromOffset(14,0),Size=UDim2.new(1,-42,1,0),TextSize=TextSizes.Control,TextTruncate=Enum.TextTruncate.AtEnd,Parent=refs.Button,})refs.Chevron=Icons.Create(refs.Button,"chevron-down",16,Color3.new(1,1,1))refs.Chevron.Frame.AnchorPoint=Vector2.new(0.5,0.5)refs.Chevron.Frame.Position=UDim2.new(1,-18,0.5,0)refs.Popup=Utility.Create("Frame",{Name="Dropdown",BackgroundTransparency=0,ClipsDescendants=true,ZIndex=2,})Utility.Corner(refs.Popup,Metrics.PopupRadius)refs.PopupStroke=Utility.Stroke(refs.Popup,1)refs.List=Utility.Create("ScrollingFrame",{Name="Options",ScrollBarThickness=3,Parent=refs.Popup,})Utility.Padding(refs.List,Metrics.PopupPadding,Metrics.PopupPadding,Metrics.PopupPadding,Metrics.PopupPadding)Utility.List(refs.List,2)return refs end function Dropdown.new(section,config)config=Utility.Merge({Name="Dropdown",Options={},Width=148,Disabled=false,},config)local refs=build(section,config)local self=setmetatable({},Dropdown)self.Frame=refs.Frame self.Options={}self.Value=nil self._refs=refs self._width=config.Width self._window=section.Window self._callback=config.Callback self._optionsJanitor=Janitor.new()refs.Janitor:Add(self._optionsJanitor)self._items={}self._open=false self._hover=false self._press=false for _,option in ipairs(config.Options)do table.insert(self.Options,tostring(option))end if config.Default~=nil and table.find(self.Options,tostring(config.Default))then self.Value=tostring(config.Default)else self.Value=self.Options[1]end Utility.Interact(refs.Button,refs.Janitor,{Hover=function(state)self._hover=state self:_render(true)end,Press=function(state)self._press=state self:_render(true)end,Click=function()if self._open then self:Close()else self:Open()end end,})self:_buildOptions()refs.Scope:Watch(function(_,animated)self:_render(animated)end)if config.Disabled then self:SetDisabled(true)end return self end function Dropdown:_popupHeight()local count=#self.Options local visible=math.min(count,Metrics.PopupMaxOptions)return visible*Metrics.OptionHeight+math.max(visible-1,0)*2+Metrics.PopupPadding*2 end function Dropdown:_buildOptions()local refs=self._refs self._optionsJanitor:Cleanup()for _,child in ipairs(refs.List:GetChildren())do if child:IsA("TextButton")then child:Destroy()end end self._items={}for index,option in ipairs(self.Options)do local button=Utility.Create("TextButton",{Name=option,Size=UDim2.new(1,0,0,Metrics.OptionHeight),LayoutOrder=index,Parent=refs.List,})Utility.Corner(button,6)local label=Utility.Create("TextLabel",{Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-36,1,0),Text=option,TextSize=TextSizes.Control,TextTruncate=Enum.TextTruncate.AtEnd,Parent=button,})local check=Icons.Create(button,"check",14,Color3.new(1,1,1))check.Frame.AnchorPoint=Vector2.new(0.5,0.5)check.Frame.Position=UDim2.new(1,-16,0.5,0)local item={Button=button,Label=label,Check=check,Option=option,Hover=false}Utility.Interact(button,self._optionsJanitor,{Hover=function(state)item.Hover=state self:_renderItem(item,true)end,Click=function()self:Close()self:Set(option)end,})self._items[index]=item self:_renderItem(item,false)end end function Dropdown:_renderItem(item,animated)local colors=self._refs.Scope:Colors()local selected=item.Option==self.Value local background=colors.Hover local transparency=1 local foreground=colors.TextSecondary if item.Hover then transparency=0 foreground=colors.Text elseif selected then background=colors.Selected transparency=0.35 foreground=colors.Text end Animation.Set(item.Button,"Hover",{BackgroundColor3=background,BackgroundTransparency=transparency,},animated)Animation.Set(item.Label,"Hover",{TextColor3=foreground},animated)item.Check.Frame.Visible=selected item.Check:SetColor(colors.Text,false)end function Dropdown:_render(animated)local refs=self._refs local colors=refs.Scope:Colors()local background=colors.Surface if self._press then background=colors.Selected elseif self._hover or self._open then background=colors.Hover end Animation.Set(refs.Button,"Hover",{BackgroundColor3=background},animated)Animation.Set(refs.ButtonStroke,"Hover",{Color=colors.Border},animated)Animation.Set(refs.Label,"Hover",{TextColor3=colors.Text},animated)refs.Chevron:SetColor(colors.TextSecondary,animated)refs.Label.Text=self.Value or ""refs.Popup.BackgroundColor3=colors.Surface refs.PopupStroke.Color=colors.Border refs.List.ScrollBarImageColor3=colors.Selected for _,item in ipairs(self._items)do self:_renderItem(item,animated)end end function Dropdown:Open()if self._open or self._refs.Disabled or#self.Options==0 then return end self._open=true local refs=self._refs local width=math.max(self._width,150)local height=self:_popupHeight()refs.Popup.Size=UDim2.fromOffset(width,0)local direction=self._window.Overlay:Open(self,refs.Button,refs.Popup,Vector2.new(width,height),6)if direction=="Up"then refs.List.AnchorPoint=Vector2.new(0,1)refs.List.Position=UDim2.fromScale(0,1)else refs.List.AnchorPoint=Vector2.new(0,0)refs.List.Position=UDim2.fromScale(0,0)end refs.List.Size=UDim2.new(1,0,0,height)Animation.Tween(refs.Popup,"Dropdown",{Size=UDim2.fromOffset(width,height)})Animation.Tween(refs.Chevron.Frame,"Dropdown",{Rotation=180})self:_render(true)end function Dropdown:Close()if not self._open then return end self._open=false local refs=self._refs self._window.Overlay:Release(self)local tween=Animation.Tween(refs.Popup,"Dropdown",{Size=UDim2.fromOffset(refs.Popup.Size.X.Offset,0)})tween.Completed:Once(function()if not self._open then refs.Popup.Parent=nil end end)Animation.Tween(refs.Chevron.Frame,"Dropdown",{Rotation=0})self:_render(true)end function Dropdown:Set(value,silent)value=tostring(value)if value==self.Value or not table.find(self.Options,value)then return end self.Value=value self:_render(true)if not silent then Utility.SafeCall(self._callback,value)end end function Dropdown:Get()return self.Value end function Dropdown:SetOptions(options,default)self.Options={}for _,option in ipairs(options)do table.insert(self.Options,tostring(option))end if default~=nil and table.find(self.Options,tostring(default))then self.Value=tostring(default)elseif not(self.Value and table.find(self.Options,self.Value))then self.Value=self.Options[1]end self:_buildOptions()self:_render(false)end function Dropdown:SetDisabled(disabled)if disabled then self:Close()end Row.SetDisabled(self._refs,disabled)end function Dropdown:SetName(text)Row.SetTitle(self._refs,text)end function Dropdown:Destroy()self:Close()self._refs.Popup:Destroy()self._refs.Janitor:Destroy()self._refs.Scope:Destroy()self._refs.Frame:Destroy()end return Dropdown end)()local Slider=(function()local TextSizes=Constants.TextSizes local Slider={}Slider.__index=Slider local function build(section,config)local refs=Row.Build(section,{Name=config.Name,Description=config.Description,ControlWidth=300,})refs.ValueLabel=Utility.Create("TextLabel",{Name="Value",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.fromScale(1,0.5),Size=UDim2.fromOffset(60,20),TextSize=TextSizes.Control,TextXAlignment=Enum.TextXAlignment.Right,Parent=refs.Control,})refs.Hit=Utility.Create("TextButton",{Name="Hit",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.fromScale(0,0.5),Size=UDim2.new(1,-72,0,28),Parent=refs.Control,})refs.Track=Utility.Create("Frame",{Name="Track",AnchorPoint=Vector2.new(0,0.5),Position=UDim2.new(0,8,0.5,0),Size=UDim2.new(1,-16,0,4),BackgroundTransparency=0,Parent=refs.Hit,})Utility.Corner(refs.Track,2)refs.Fill=Utility.Create("Frame",{Name="Fill",Size=UDim2.fromScale(0,1),BackgroundTransparency=0,Parent=refs.Track,})Utility.Corner(refs.Fill,2)refs.Thumb=Utility.Create("Frame",{Name="Thumb",AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0,0.5),Size=UDim2.fromOffset(14,14),BackgroundTransparency=0,Parent=refs.Track,})Utility.Corner(refs.Thumb,8)return refs end function Slider.new(section,config)config=Utility.Merge({Name="Slider",Min=0,Max=100,Increment=1,Suffix="",Disabled=false,},config)if config.Max<=config.Min then config.Max=config.Min+1 end local refs=build(section,config)local self=setmetatable({},Slider)self.Frame=refs.Frame self.Min=config.Min self.Max=config.Max self.Increment=config.Increment self.Suffix=config.Suffix self._refs=refs self._section=section self._callback=config.Callback self._hover=false self._dragging=false self.Value=self:_normalize(config.Default or config.Min)Utility.Interact(refs.Hit,refs.Janitor,{Hover=function(state)self._hover=state self:_render(true)end,})Utility.Drag(refs.Hit,refs.Janitor,{Began=function(position)self._dragging=true self._section.Tab.Scroll.ScrollingEnabled=false self:_fromPosition(position)self:_render(true)end,Changed=function(position)self:_fromPosition(position)end,Ended=function()self._dragging=false self._section.Tab.Scroll.ScrollingEnabled=true self:_render(true)end,})refs.Scope:Watch(function(_,animated)self:_render(animated)end)if config.Disabled then self:SetDisabled(true)end return self end function Slider:_normalize(value)local rounded=Utility.Round(value-self.Min,self.Increment)+self.Min return math.clamp(rounded,self.Min,self.Max)end function Slider:_alpha()return(self.Value-self.Min)/(self.Max-self.Min)end function Slider:_fromPosition(position)local track=self._refs.Track local alpha=math.clamp((position.X-track.AbsolutePosition.X)/math.max(track.AbsoluteSize.X,1),0,1)self:Set(self.Min+(self.Max-self.Min)*alpha,false,true)end function Slider:_render(animated)local refs=self._refs local colors=refs.Scope:Colors()local alpha=self:_alpha()local thumbSize=(self._dragging or self._hover)and 16 or 14 refs.Track.BackgroundColor3=colors.Hover refs.Fill.BackgroundColor3=colors.Accent refs.Thumb.BackgroundColor3=colors.Accent refs.ValueLabel.TextColor3=self._dragging and colors.Text or colors.TextSecondary refs.ValueLabel.Text=Utility.FormatNumber(self.Value)..self.Suffix Animation.Set(refs.Fill,"Hover",{Size=UDim2.fromScale(alpha,1)},animated and not self._dragging)Animation.Set(refs.Thumb,"Hover",{Position=UDim2.fromScale(alpha,0.5),Size=UDim2.fromOffset(thumbSize,thumbSize),},animated and not self._dragging)if self._dragging then refs.Thumb.Position=UDim2.fromScale(alpha,0.5)refs.Thumb.Size=UDim2.fromOffset(thumbSize,thumbSize)refs.Fill.Size=UDim2.fromScale(alpha,1)end end function Slider:Set(value,silent,instant)local normalized=self:_normalize(value)if normalized==self.Value then return end self.Value=normalized self:_render(not instant)if not silent then Utility.SafeCall(self._callback,normalized)end end function Slider:Get()return self.Value end function Slider:SetRange(min,max)self.Min=min self.Max=math.max(max,min+1)self.Value=self:_normalize(self.Value)self:_render(true)end function Slider:SetDisabled(disabled)Row.SetDisabled(self._refs,disabled)end function Slider:SetName(text)Row.SetTitle(self._refs,text)end function Slider:Destroy()self._refs.Janitor:Destroy()self._refs.Scope:Destroy()self._refs.Frame:Destroy()end return Slider end)()local Button=(function()local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Button={}Button.__index=Button local function build(section,config)local refs=Row.Build(section,{Name=config.Name,Description=config.Description,ControlWidth=config.Width,})refs.Button=Utility.Create("TextButton",{Name="Button",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.fromScale(1,0.5),Size=UDim2.fromOffset(config.Width,Metrics.ControlHeight),BackgroundTransparency=0,Text=config.ButtonText,TextSize=TextSizes.Control,FontFace=Constants.Fonts.Medium,Parent=refs.Control,})Utility.Corner(refs.Button,Metrics.ControlRadius)refs.Stroke=Utility.Stroke(refs.Button,1,0.5)refs.Scale=Utility.Create("UIScale",{Parent=refs.Button})return refs end function Button.new(section,config)config=Utility.Merge({Name="Button",ButtonText="Run",Width=100,Disabled=false,},config)local refs=build(section,config)local self=setmetatable({},Button)self.Frame=refs.Frame self._refs=refs self._callback=config.Callback self._hover=false self._press=false Utility.Interact(refs.Button,refs.Janitor,{Hover=function(state)self._hover=state self:_render(true)end,Press=function(state)self._press=state self:_render(true)end,Click=function()self:Fire()end,})refs.Scope:Watch(function(_,animated)self:_render(animated)end)if config.Disabled then self:SetDisabled(true)end return self end function Button:_render(animated)local refs=self._refs local colors=refs.Scope:Colors()local background=colors.Surface if self._press then background=colors.Selected elseif self._hover then background=colors.Hover end Animation.Set(refs.Button,"Hover",{BackgroundColor3=background,TextColor3=colors.Text,},animated)Animation.Set(refs.Stroke,"Hover",{Color=colors.Border},animated)Animation.Set(refs.Scale,"Press",{Scale=self._press and 0.96 or 1},animated)end function Button:Fire()if self._refs.Disabled then return end Utility.SafeCall(self._callback)end function Button:SetText(text)self._refs.Button.Text=text end function Button:SetName(text)Row.SetTitle(self._refs,text)end function Button:SetDescription(text)Row.SetDescription(self._refs,text)end function Button:SetDisabled(disabled)Row.SetDisabled(self._refs,disabled)end function Button:Destroy()self._refs.Janitor:Destroy()self._refs.Scope:Destroy()self._refs.Frame:Destroy()end return Button end)()local Input=(function()local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Input={}Input.__index=Input local function build(section,config)local refs=Row.Build(section,{Name=config.Name,Description=config.Description,ControlWidth=config.Width,})refs.Box=Utility.Create("Frame",{Name="Box",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.fromScale(1,0.5),Size=UDim2.fromOffset(config.Width,Metrics.ControlHeight),BackgroundTransparency=0,Parent=refs.Control,})Utility.Corner(refs.Box,Metrics.ControlRadius)refs.Stroke=Utility.Stroke(refs.Box,1,0.5)refs.TextBox=Utility.Create("TextBox",{Name="Input",Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-24,1,0),PlaceholderText=config.Placeholder,ClearTextOnFocus=config.ClearOnFocus,Text=config.Default,TextSize=TextSizes.Control,TextTruncate=Enum.TextTruncate.AtEnd,Parent=refs.Box,})return refs end function Input.new(section,config)config=Utility.Merge({Name="Input",Placeholder="Enter text...",Default="",ClearOnFocus=false,Width=220,Live=false,Disabled=false,},config)local refs=build(section,config)local self=setmetatable({},Input)self.Frame=refs.Frame self.Value=config.Default self._refs=refs self._callback=config.Callback self._validate=config.Validate self._maxLength=config.MaxLength self._live=config.Live self._focused=false self._hover=false self._invalid=false Utility.Interact(refs.Box,refs.Janitor,{Hover=function(state)self._hover=state self:_render(true)end,})refs.Janitor:Add(refs.TextBox.Focused:Connect(function()self._focused=true self:_render(true)end))refs.Janitor:Add(refs.TextBox:GetPropertyChangedSignal("Text"):Connect(function()local text=refs.TextBox.Text if self._maxLength and#text>self._maxLength then refs.TextBox.Text=string.sub(text,1,self._maxLength)return end if self._live and self._focused then self:_commit(text,false)end end))refs.Janitor:Add(refs.TextBox.FocusLost:Connect(function(enterPressed)self._focused=false self:_commit(refs.TextBox.Text,enterPressed)self:_render(true)end))refs.Scope:Watch(function(_,animated)self:_render(animated)end)if config.Disabled then self:SetDisabled(true)end return self end function Input:_commit(text,enterPressed)if self._validate then local ok,result=pcall(self._validate,text)if not ok or result==false then self._refs.TextBox.Text=self.Value self:_flashInvalid()return end end if text==self.Value then return end self.Value=text Utility.SafeCall(self._callback,text,enterPressed)end function Input:_flashInvalid()self._invalid=true self:_render(true)task.delay(0.6,function()self._invalid=false if self._refs.Box.Parent then self:_render(true)end end)end function Input:_render(animated)local refs=self._refs local colors=refs.Scope:Colors()local strokeColor=colors.Border local strokeTransparency=0.5 local background=colors.Surface if self._invalid then strokeColor=colors.Error strokeTransparency=0 elseif self._focused then strokeColor=colors.TextMuted strokeTransparency=0 elseif self._hover then background=colors.Hover end Animation.Set(refs.Box,"Hover",{BackgroundColor3=background},animated)Animation.Set(refs.Stroke,"Hover",{Color=strokeColor,Transparency=strokeTransparency,},animated)refs.TextBox.TextColor3=colors.Text refs.TextBox.PlaceholderColor3=colors.TextMuted end function Input:Set(text,silent)text=tostring(text)self._refs.TextBox.Text=text if text==self.Value then return end self.Value=text if not silent then Utility.SafeCall(self._callback,text,false)end end function Input:Get()return self.Value end function Input:Focus()self._refs.TextBox:CaptureFocus()end function Input:SetPlaceholder(text)self._refs.TextBox.PlaceholderText=text end function Input:SetDisabled(disabled)self._refs.TextBox.TextEditable=not disabled Row.SetDisabled(self._refs,disabled)end function Input:SetName(text)Row.SetTitle(self._refs,text)end function Input:Destroy()self._refs.Janitor:Destroy()self._refs.Scope:Destroy()self._refs.Frame:Destroy()end return Input end)()local Keybind=(function()local UserInputService=game:GetService("UserInputService")local Metrics=Constants.Metrics local TextSizes=Constants.TextSizes local Keybind={}Keybind.__index=Keybind local function build(section,config)local refs=Row.Build(section,{Name=config.Name,Description=config.Description,ControlWidth=config.Width,})refs.Button=Utility.Create("TextButton",{Name="Button",AnchorPoint=Vector2.new(1,0.5),Position=UDim2.fromScale(1,0.5),Size=UDim2.fromOffset(config.Width,Metrics.ControlHeight),BackgroundTransparency=0,TextSize=TextSizes.Control,Parent=refs.Control,})Utility.Corner(refs.Button,Metrics.ControlRadius)refs.Stroke=Utility.Stroke(refs.Button,1,0.5)return refs end function Keybind.new(section,config)config=Utility.Merge({Name="Keybind",Default=Enum.KeyCode.Unknown,Width=130,Disabled=false,},config)local refs=build(section,config)local self=setmetatable({},Keybind)self.Frame=refs.Frame self.Value=config.Default self._refs=refs self._window=section.Window self._callback=config.Callback self._onPressed=config.OnPressed self._listening=false self._hover=false self._press=false Utility.Interact(refs.Button,refs.Janitor,{Hover=function(state)self._hover=state self:_render(true)end,Press=function(state)self._press=state self:_render(true)end,Click=function()if self._listening then self:_stopListening()else self:_startListening()end end,})refs.Janitor:Add(UserInputService.InputBegan:Connect(function(input,processed)if self._listening then if input.UserInputType==Enum.UserInputType.Keyboard then if input.KeyCode==Enum.KeyCode.Escape then self:_stopListening()elseif input.KeyCode==Enum.KeyCode.Backspace then self:_stopListening()self:Set(Enum.KeyCode.Unknown)else self:_stopListening()self:Set(input.KeyCode)end end return end if processed or self._window._listening then return end if self._onPressed and self.Value~=Enum.KeyCode.Unknown and input.KeyCode==self.Value then Utility.SafeCall(self._onPressed,self.Value)end end))refs.Janitor:Add(function()if self._listening then self._window:SetKeybindListening(false)end end)refs.Scope:Watch(function(_,animated)self:_render(animated)end)if config.Disabled then self:SetDisabled(true)end return self end function Keybind:_startListening()self._listening=true self._window:SetKeybindListening(true)self:_render(true)end function Keybind:_stopListening()if not self._listening then return end self._listening=false self._window:SetKeybindListening(false)self:_render(true)end function Keybind:_render(animated)local refs=self._refs local colors=refs.Scope:Colors()local background=colors.Surface if self._press then background=colors.Selected elseif self._hover or self._listening then background=colors.Hover end Animation.Set(refs.Button,"Hover",{BackgroundColor3=background},animated)Animation.Set(refs.Stroke,"Hover",{Color=self._listening and colors.TextMuted or colors.Border,Transparency=self._listening and 0 or 0.5,},animated)refs.Button.TextColor3=self._listening and colors.TextSecondary or colors.Text if self._listening then refs.Button.Text="Press a key…"else refs.Button.Text=Utility.KeyName(self.Value)end end function Keybind:Set(keyCode,silent)if keyCode==self.Value then return end self.Value=keyCode self:_render(true)if not silent then Utility.SafeCall(self._callback,keyCode)end end function Keybind:Get()return self.Value end function Keybind:SetDisabled(disabled)if disabled then self:_stopListening()end Row.SetDisabled(self._refs,disabled)end function Keybind:SetName(text)Row.SetTitle(self._refs,text)end function Keybind:Destroy()self._refs.Janitor:Destroy()self._refs.Scope:Destroy()self._refs.Frame:Destroy()end return Keybind end)()local Paragraph=(function()local TextSizes=Constants.TextSizes local Paragraph={}Paragraph.__index=Paragraph function Paragraph.new(section,config)config=Utility.Merge({Title="",Content="",RichText=false},config)local context=section:CreateContext()local scope=context.Scope local frame=Utility.Create("Frame",{Name="Paragraph",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,LayoutOrder=section:NextOrder(),Parent=section.Container,})Utility.Padding(frame,8,0,8,0)local card=Utility.Create("Frame",{Name="Card",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=0,Parent=frame,})scope:Bind(card,{BackgroundColor3="Surface"})Utility.Corner(card,10)scope:Bind(Utility.Stroke(card,1,0.5),{Color="Border"})Utility.Padding(card,14,16,14,16)Utility.List(card,6)local title=Utility.Create("TextLabel",{Name="Title",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,Text=config.Title,FontFace=Constants.Fonts.Medium,TextSize=TextSizes.Body,TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,Visible=config.Title~="",LayoutOrder=1,Parent=card,})scope:Bind(title,{TextColor3="Text"})local content=Utility.Create("TextLabel",{Name="Content",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,Text=config.Content,RichText=config.RichText,TextSize=TextSizes.Control,TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,LayoutOrder=2,Parent=card,})scope:Bind(content,{TextColor3="TextSecondary"})section:AddEntry(frame,config.Title.." "..config.Content)local self=setmetatable({},Paragraph)self.Frame=frame self._title=title self._content=content self._context=context return self end function Paragraph:SetTitle(text)self._title.Text=text self._title.Visible=text~=""end function Paragraph:SetContent(text)self._content.Text=text end function Paragraph:Destroy()self._context.Janitor:Destroy()self._context.Scope:Destroy()self.Frame:Destroy()end return Paragraph end)()local Label=(function()local TextSizes=Constants.TextSizes local Label={}Label.__index=Label local alignments={Left=Enum.TextXAlignment.Left,Center=Enum.TextXAlignment.Center,Right=Enum.TextXAlignment.Right,}function Label.new(section,config)config=Utility.Merge({Text="Label",TextSize=TextSizes.Body,Weight="Regular",Color="TextSecondary",Alignment="Left",},config)local context=section:CreateContext()local scope=context.Scope local frame=Utility.Create("Frame",{Name="Label",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,LayoutOrder=section:NextOrder(),Parent=section.Container,})Utility.Padding(frame,10,0,10,0)local label=Utility.Create("TextLabel",{Name="Text",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,Text=config.Text,FontFace=Constants.Fonts[config.Weight]or Constants.Fonts.Regular,TextSize=config.TextSize,TextWrapped=true,TextXAlignment=alignments[config.Alignment]or Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,Parent=frame,})local self=setmetatable({},Label)self.Frame=frame self._label=label self._context=context self:SetColor(config.Color)section:AddEntry(frame,config.Text)return self end function Label:SetColor(color)if typeof(color)=="Color3"then self._label.TextColor3=color else self._context.Scope:Bind(self._label,{TextColor3=color})end end function Label:SetText(text)self._label.Text=text end function Label:Destroy()self._context.Janitor:Destroy()self._context.Scope:Destroy()self.Frame:Destroy()end return Label end)()local Library=(function()local Library={}Library.Version=Constants.Version Library.Theme=ThemeManager.new()Library.Windows={}Library.Core={Constants=Constants,Utility=Utility,Animation=Animation,Icons=Icons,Row=Row,Janitor=Janitor,ThemeManager=ThemeManager,}Library._notifications=nil Section.RegisterComponent("Toggle",Toggle)Section.RegisterComponent("Dropdown",Dropdown)Section.RegisterComponent("Slider",Slider)Section.RegisterComponent("Button",Button)Section.RegisterComponent("Input",Input)Section.RegisterComponent("Keybind",Keybind)Section.RegisterComponent("Paragraph",Paragraph)Section.RegisterComponent("Label",Label)function Library:CreateWindow(config)local window=Window.new(self,config or{})table.insert(self.Windows,window)return window end function Library:_removeWindow(window)local index=table.find(self.Windows,window)if index then table.remove(self.Windows,index)end end function Library:SetTheme(theme)self.Theme:Set(theme)end function Library:GetTheme()return self.Theme:GetName(),self.Theme:GetColors()end function Library:GetThemeNames()return self.Theme:GetNames()end function Library:RegisterTheme(name,colors)return self.Theme:RegisterTheme(name,colors)end function Library:OnThemeChanged(callback)return self.Theme:OnChanged(callback)end function Library:Notify(config)if not self._notifications then self._notifications=Notification.new(self.Theme)end return self._notifications:Push(config or{})end function Library:RegisterIcon(name,icon)Icons.Register(name,icon)end function Library:SetIconsType(iconType)return Icons.SetType(iconType)end function Library:RegisterComponent(name,module)assert(type(module)=="table"and type(module.new)=="function","Component modules must expose a new(section, config) function")Section.RegisterComponent(name,module)end function Library:SetFonts(fonts)for key,font in pairs(fonts)do Constants.Fonts[key]=font end end function Library:Destroy()for index=#self.Windows,1,-1 do self.Windows[index]:Destroy()end if self._notifications then self._notifications:Destroy()self._notifications=nil end end return Library end)()return Library
+local Constants = (function()
+	local Constants = {}
+
+	Constants.Version = "1.0.0"
+
+	Constants.Fonts = {
+		Regular = Font.fromEnum(Enum.Font.BuilderSans),
+		Medium = Font.fromEnum(Enum.Font.BuilderSansMedium),
+		SemiBold = Font.fromEnum(Enum.Font.BuilderSansBold),
+		Bold = Font.fromEnum(Enum.Font.BuilderSansExtraBold),
+	}
+
+	Constants.Durations = {
+		Hover = 0.12,
+		Press = 0.10,
+		Toggle = 0.18,
+		Dropdown = 0.20,
+		Window = 0.25,
+		Tab = 0.18,
+		Theme = 0.20,
+		Notification = 0.25,
+	}
+
+	Constants.Metrics = {
+		WindowRadius = 14,
+		ControlRadius = 8,
+		PopupRadius = 10,
+		TopBarHeight = 56,
+		SidebarWidth = 236,
+		SidebarCompactWidth = 188,
+		CompactBreakpoint = 760,
+		MinWindowSize = Vector2.new(480, 320),
+		ScreenFraction = 0.96,
+		SearchHeight = 38,
+		NavItemHeight = 38,
+		NavHeaderHeight = 30,
+		PagePadding = 28,
+		PageHeaderHeight = 72,
+		RowHeight = 50,
+		RowPadding = 12,
+		ControlHeight = 34,
+		ToggleWidth = 46,
+		ToggleHeight = 26,
+		OptionHeight = 32,
+		PopupMaxOptions = 6,
+		PopupPadding = 4,
+		NotificationWidth = 320,
+		NotificationMax = 5,
+	}
+
+	Constants.TextSizes = {
+		Title = 20,
+		PageTitle = 22,
+		Body = 15,
+		Small = 13,
+		Header = 15,
+		Control = 14,
+	}
+
+	return Constants
+end)()
+
+local Janitor = (function()
+	local Janitor = {}
+	Janitor.__index = Janitor
+
+	local function cleanItem(item)
+		local kind = typeof(item)
+		if kind == "RBXScriptConnection" then
+			item:Disconnect()
+		elseif kind == "Instance" then
+			item:Destroy()
+		elseif kind == "function" then
+			item()
+		elseif kind == "thread" then
+			pcall(task.cancel, item)
+		elseif kind == "table" then
+			if type(item.Destroy) == "function" then
+				item:Destroy()
+			elseif type(item.Disconnect) == "function" then
+				item:Disconnect()
+			end
+		end
+	end
+
+	function Janitor.new()
+		return setmetatable({ _items = {}, _destroyed = false }, Janitor)
+	end
+
+	function Janitor:Add(item)
+		if self._destroyed then
+			cleanItem(item)
+			return item
+		end
+		table.insert(self._items, item)
+		return item
+	end
+
+	function Janitor:Connect(signal, callback)
+		return self:Add(signal:Connect(callback))
+	end
+
+	function Janitor:Cleanup()
+		local items = self._items
+		self._items = {}
+		for index = #items, 1, -1 do
+			cleanItem(items[index])
+		end
+	end
+
+	function Janitor:Destroy()
+		self._destroyed = true
+		self:Cleanup()
+	end
+
+	return Janitor
+end)()
+
+local Animation = (function()
+	local TweenService = game:GetService("TweenService")
+
+
+	local Animation = {}
+
+	local styles = {
+		Toggle = Enum.EasingStyle.Quart,
+		Dropdown = Enum.EasingStyle.Quart,
+		Window = Enum.EasingStyle.Quart,
+		Notification = Enum.EasingStyle.Quart,
+	}
+
+	local infos = {}
+	for name, duration in pairs(Constants.Durations) do
+		infos[name] = TweenInfo.new(duration, styles[name] or Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	end
+
+	function Animation.Info(preset)
+		if typeof(preset) == "TweenInfo" then
+			return preset
+		end
+		return infos[preset] or infos.Hover
+	end
+
+	function Animation.Tween(instance, preset, properties)
+		local tween = TweenService:Create(instance, Animation.Info(preset), properties)
+		tween:Play()
+		return tween
+	end
+
+	function Animation.Set(instance, preset, properties, animated)
+		if animated then
+			return Animation.Tween(instance, preset, properties)
+		end
+		for property, value in pairs(properties) do
+			instance[property] = value
+		end
+		return nil
+	end
+
+	return Animation
+end)()
+
+local Utility = (function()
+	local Players = game:GetService("Players")
+	local UserInputService = game:GetService("UserInputService")
+
+
+	local Utility = {}
+
+	local textClasses = {
+		TextLabel = true,
+		TextButton = true,
+		TextBox = true,
+	}
+
+	local defaults = {
+		Frame = {
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+		},
+		CanvasGroup = {
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+		},
+		TextLabel = {
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			Text = "",
+			TextSize = Constants.TextSizes.Body,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		},
+		TextButton = {
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+			Text = "",
+			TextSize = Constants.TextSizes.Body,
+		},
+		TextBox = {
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			Text = "",
+			ClearTextOnFocus = false,
+			TextSize = Constants.TextSizes.Body,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		},
+		ImageLabel = {
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+		},
+		ImageButton = {
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+		},
+		ScrollingFrame = {
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 4,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			VerticalScrollBarInset = Enum.ScrollBarInset.None,
+		},
+	}
+
+	function Utility.Create(className, properties, children)
+		local instance = Instance.new(className)
+		local classDefaults = defaults[className]
+		if classDefaults then
+			for property, value in pairs(classDefaults) do
+				instance[property] = value
+			end
+		end
+		if textClasses[className] then
+			instance.FontFace = Constants.Fonts.Regular
+		end
+		local parent = nil
+		if properties then
+			for property, value in pairs(properties) do
+				if property == "Parent" then
+					parent = value
+				else
+					instance[property] = value
+				end
+			end
+		end
+		if children then
+			for _, child in ipairs(children) do
+				child.Parent = instance
+			end
+		end
+		if parent then
+			instance.Parent = parent
+		end
+		return instance
+	end
+
+	function Utility.Corner(parent, radius)
+		return Utility.Create("UICorner", {
+			CornerRadius = UDim.new(0, radius),
+			Parent = parent,
+		})
+	end
+
+	function Utility.Stroke(parent, thickness, transparency)
+		return Utility.Create("UIStroke", {
+			Thickness = thickness or 1,
+			Transparency = transparency or 0,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			Parent = parent,
+		})
+	end
+
+	function Utility.Padding(parent, top, right, bottom, left)
+		return Utility.Create("UIPadding", {
+			PaddingTop = UDim.new(0, top or 0),
+			PaddingRight = UDim.new(0, right or 0),
+			PaddingBottom = UDim.new(0, bottom or 0),
+			PaddingLeft = UDim.new(0, left or 0),
+			Parent = parent,
+		})
+	end
+
+	function Utility.List(parent, padding, options)
+		local layout = Instance.new("UIListLayout")
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, padding or 0)
+		if options then
+			for property, value in pairs(options) do
+				layout[property] = value
+			end
+		end
+		layout.Parent = parent
+		return layout
+	end
+
+	function Utility.Merge(base, overrides)
+		local result = {}
+		for key, value in pairs(base) do
+			result[key] = value
+		end
+		if overrides then
+			for key, value in pairs(overrides) do
+				result[key] = value
+			end
+		end
+		return result
+	end
+
+	function Utility.Round(value, step)
+		step = step or 1
+		if step <= 0 then
+			return value
+		end
+		local rounded = math.floor(value / step + 0.5) * step
+		return tonumber(string.format("%.6f", rounded))
+	end
+
+	function Utility.FormatNumber(value)
+		local text = string.format("%.4f", value)
+		text = string.gsub(text, "0+$", "")
+		text = string.gsub(text, "%.$", "")
+		return text
+	end
+
+	function Utility.Normalize(text)
+		local lowered = string.lower(tostring(text or ""))
+		lowered = string.gsub(lowered, "^%s+", "")
+		lowered = string.gsub(lowered, "%s+$", "")
+		return lowered
+	end
+
+	function Utility.Contains(haystack, needle)
+		return string.find(string.lower(tostring(haystack or "")), needle, 1, true) ~= nil
+	end
+
+	function Utility.KeyName(keyCode)
+		if keyCode == nil or keyCode == Enum.KeyCode.Unknown then
+			return "None"
+		end
+		local spaced = string.gsub(keyCode.Name, "(%l)(%u)", "%1 %2")
+		return spaced
+	end
+
+	function Utility.SafeCall(callback, ...)
+		if type(callback) == "function" then
+			task.spawn(callback, ...)
+		end
+	end
+
+	function Utility.GetGuiParent()
+		local player = Players.LocalPlayer
+		assert(player, "RobloxUI must be required from a client script")
+		return player:WaitForChild("PlayerGui")
+	end
+
+	function Utility.IsPrimaryInput(input)
+		return input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+	end
+
+	function Utility.Interact(button, janitor, handlers)
+		local pressing = false
+
+		janitor:Add(button.MouseEnter:Connect(function()
+			if handlers.Hover then
+				handlers.Hover(true)
+			end
+		end))
+
+		janitor:Add(button.MouseLeave:Connect(function()
+			if handlers.Hover then
+				handlers.Hover(false)
+			end
+			if pressing then
+				pressing = false
+				if handlers.Press then
+					handlers.Press(false)
+				end
+			end
+		end))
+
+		janitor:Add(button.InputBegan:Connect(function(input)
+			if Utility.IsPrimaryInput(input) then
+				pressing = true
+				if handlers.Press then
+					handlers.Press(true)
+				end
+			end
+		end))
+
+		janitor:Add(button.InputEnded:Connect(function(input)
+			if not Utility.IsPrimaryInput(input) then
+				return
+			end
+			if pressing then
+				pressing = false
+				if handlers.Press then
+					handlers.Press(false)
+				end
+			end
+			if input.UserInputType == Enum.UserInputType.Touch and handlers.Hover then
+				handlers.Hover(false)
+			end
+		end))
+
+		if handlers.Click then
+			janitor:Add(button.Activated:Connect(function()
+				handlers.Click()
+			end))
+		end
+	end
+
+	function Utility.Drag(handle, janitor, callbacks)
+		local active = false
+		local origin = Vector2.zero
+
+		janitor:Add(handle.InputBegan:Connect(function(input)
+			if active or not Utility.IsPrimaryInput(input) then
+				return
+			end
+			active = true
+			origin = Vector2.new(input.Position.X, input.Position.Y)
+			if callbacks.Began then
+				callbacks.Began(origin)
+			end
+		end))
+
+		janitor:Add(UserInputService.InputChanged:Connect(function(input)
+			if not active then
+				return
+			end
+			if input.UserInputType ~= Enum.UserInputType.MouseMovement
+				and input.UserInputType ~= Enum.UserInputType.Touch then
+				return
+			end
+			local position = Vector2.new(input.Position.X, input.Position.Y)
+			if callbacks.Changed then
+				callbacks.Changed(position, position - origin)
+			end
+		end))
+
+		janitor:Add(UserInputService.InputEnded:Connect(function(input)
+			if not active or not Utility.IsPrimaryInput(input) then
+				return
+			end
+			active = false
+			if callbacks.Ended then
+				callbacks.Ended()
+			end
+		end))
+	end
+
+	return Utility
+end)()
+
+local ThemeManager = (function()
+	local ThemeManager = {}
+	ThemeManager.__index = ThemeManager
+
+	local Scope = {}
+	Scope.__index = Scope
+
+	local palettes = {
+		Dark = {
+			Background = "#17181B",
+			Window = "#1C1D21",
+			Sidebar = "#191A1E",
+			Surface = "#25262B",
+			Hover = "#303137",
+			Selected = "#3A3B41",
+			Border = "#35363B",
+			Text = "#F2F2F3",
+			TextSecondary = "#A3A4AA",
+			TextMuted = "#777980",
+			Accent = "#FFFFFF",
+			AccentText = "#17181B",
+			ToggleOn = "#5A5B62",
+			ToggleOff = "#303137",
+			KnobOn = "#FFFFFF",
+			KnobOff = "#9A9BA2",
+			Success = "#5CC98A",
+			Warning = "#E6B450",
+			Error = "#E86464",
+			Info = "#78A0E6",
+		},
+		Light = {
+			Background = "#F2F2F5",
+			Window = "#FFFFFF",
+			Sidebar = "#F6F6F8",
+			Surface = "#F0F0F3",
+			Hover = "#E8E8EC",
+			Selected = "#DFDFE5",
+			Border = "#E2E2E7",
+			Text = "#17181B",
+			TextSecondary = "#5E5F67",
+			TextMuted = "#8C8D95",
+			Accent = "#17181B",
+			AccentText = "#FFFFFF",
+			ToggleOn = "#2C2D32",
+			ToggleOff = "#D5D5DB",
+			KnobOn = "#FFFFFF",
+			KnobOff = "#FFFFFF",
+			Success = "#2E9E62",
+			Warning = "#C48A1A",
+			Error = "#D04444",
+			Info = "#3E6FD0",
+		},
+		Midnight = {
+			Background = "#08090C",
+			Window = "#0D0E13",
+			Sidebar = "#0A0B0F",
+			Surface = "#161820",
+			Hover = "#1F212B",
+			Selected = "#292C38",
+			Border = "#242733",
+			Text = "#EDEEF3",
+			TextSecondary = "#9799A6",
+			TextMuted = "#666878",
+			Accent = "#FFFFFF",
+			AccentText = "#0D0E13",
+			ToggleOn = "#4A4F6A",
+			ToggleOff = "#1F212B",
+			KnobOn = "#FFFFFF",
+			KnobOff = "#8C8EA0",
+			Success = "#5CC98A",
+			Warning = "#E6B450",
+			Error = "#E86464",
+			Info = "#78A0E6",
+		},
+	}
+
+	local function normalize(colors)
+		local result = {}
+		for key, value in pairs(colors) do
+			if typeof(value) == "string" then
+				result[key] = Color3.fromHex(value)
+			elseif typeof(value) == "Color3" then
+				result[key] = value
+			end
+		end
+		return result
+	end
+
+	local function copy(source)
+		local result = {}
+		for key, value in pairs(source) do
+			result[key] = value
+		end
+		return result
+	end
+
+	function Scope.new(manager, parent)
+		local self = setmetatable({}, Scope)
+		self._manager = manager
+		self._parent = parent
+		self._bindings = {}
+		self._watchers = {}
+		self._children = {}
+		self._destroyed = false
+		manager._scopes[self] = true
+		return self
+	end
+
+	function Scope:Colors()
+		return self._manager._colors
+	end
+
+	function Scope:Get(key)
+		return self._manager._colors[key]
+	end
+
+	function Scope:Bind(instance, properties)
+		if self._destroyed then
+			return instance
+		end
+		local colors = self._manager._colors
+		for property, key in pairs(properties) do
+			local color = colors[key]
+			assert(color, "Unknown theme key: " .. tostring(key))
+			instance[property] = color
+		end
+		table.insert(self._bindings, { Instance = instance, Properties = properties })
+		return instance
+	end
+
+	function Scope:Watch(callback)
+		if self._destroyed then
+			return function() end
+		end
+		table.insert(self._watchers, callback)
+		callback(self._manager._colors, false)
+		return function()
+			local index = table.find(self._watchers, callback)
+			if index then
+				table.remove(self._watchers, index)
+			end
+		end
+	end
+
+	function Scope:Child()
+		local child = Scope.new(self._manager, self)
+		self._children[child] = true
+		return child
+	end
+
+	function Scope:_apply(colors, animated)
+		for _, binding in ipairs(self._bindings) do
+			local goals = {}
+			for property, key in pairs(binding.Properties) do
+				goals[property] = colors[key]
+			end
+			Animation.Set(binding.Instance, "Theme", goals, animated)
+		end
+		for _, watcher in ipairs(self._watchers) do
+			watcher(colors, animated)
+		end
+	end
+
+	function Scope:Destroy()
+		if self._destroyed then
+			return
+		end
+		self._destroyed = true
+		for child in pairs(self._children) do
+			child:Destroy()
+		end
+		self._children = {}
+		self._bindings = {}
+		self._watchers = {}
+		self._manager._scopes[self] = nil
+		if self._parent then
+			self._parent._children[self] = nil
+		end
+	end
+
+	function ThemeManager.new()
+		local self = setmetatable({}, ThemeManager)
+		self._themes = {}
+		for name, palette in pairs(palettes) do
+			self._themes[name] = normalize(palette)
+		end
+		self._themes.Custom = copy(self._themes.Dark)
+		self._name = "Dark"
+		self._colors = self._themes.Dark
+		self._scopes = {}
+		self._listeners = {}
+		return self
+	end
+
+	function ThemeManager:GetName()
+		return self._name
+	end
+
+	function ThemeManager:GetColors()
+		return self._colors
+	end
+
+	function ThemeManager:GetNames()
+		local names = {}
+		for name in pairs(self._themes) do
+			table.insert(names, name)
+		end
+		table.sort(names)
+		return names
+	end
+
+	function ThemeManager:RegisterTheme(name, colors)
+		local theme = copy(self._themes.Dark)
+		for key, value in pairs(normalize(colors)) do
+			theme[key] = value
+		end
+		self._themes[name] = theme
+		return theme
+	end
+
+	function ThemeManager:Set(theme)
+		local name
+		local colors
+		if type(theme) == "string" then
+			colors = self._themes[theme]
+			assert(colors, "Unknown theme: " .. theme)
+			name = theme
+		elseif type(theme) == "table" then
+			colors = copy(self._colors)
+			for key, value in pairs(normalize(theme)) do
+				colors[key] = value
+			end
+			self._themes.Custom = colors
+			name = "Custom"
+		else
+			error("Theme must be a theme name or a table of colors")
+		end
+		self._name = name
+		self._colors = colors
+		local snapshot = {}
+		for scope in pairs(self._scopes) do
+			table.insert(snapshot, scope)
+		end
+		for _, scope in ipairs(snapshot) do
+			if not scope._destroyed then
+				scope:_apply(colors, true)
+			end
+		end
+		for _, listener in ipairs(self._listeners) do
+			task.spawn(listener, name, colors)
+		end
+	end
+
+	function ThemeManager:OnChanged(callback)
+		table.insert(self._listeners, callback)
+		return function()
+			local index = table.find(self._listeners, callback)
+			if index then
+				table.remove(self._listeners, index)
+			end
+		end
+	end
+
+	function ThemeManager:CreateScope()
+		return Scope.new(self, nil)
+	end
+
+	return ThemeManager
+end)()
+
+local Icons = (function()
+	local Icons = {}
+
+	local Icon = {}
+	Icon.__index = Icon
+
+	local registry = {}
+	local aliases = {
+		close = "x",
+	}
+	local provider = nil
+
+	local loaded, result = pcall(function()
+		return loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"))()
+	end)
+	if loaded and type(result) == "table" then
+		provider = result
+		pcall(function()
+			provider.SetIconsType("lucide")
+		end)
+	else
+		warn("[PhaseLib] Failed to load IconsV2: " .. tostring(result))
+	end
+
+	local function isDirect(value)
+		return string.find(value, "^rbxasset") ~= nil or string.find(value, "^https?://") ~= nil
+	end
+
+	local function resolve(name)
+		if not provider then
+			return nil
+		end
+		local success, icon = pcall(provider.GetIcon, aliases[name] or name)
+		if success and icon ~= nil then
+			return icon
+		end
+		return nil
+	end
+
+	function Icons.SetType(iconType)
+		if not provider then
+			return false
+		end
+		return (pcall(provider.SetIconsType, iconType))
+	end
+
+	function Icons.Register(name, value)
+		registry[name] = value
+	end
+
+	function Icons.Has(name)
+		if registry[name] ~= nil then
+			return true
+		end
+		return resolve(name) ~= nil
+	end
+
+	function Icons.Create(parent, icon, size, color)
+		size = size or 18
+		color = color or Color3.new(1, 1, 1)
+
+		local container = Utility.Create("Frame", {
+			Name = "Icon",
+			Size = UDim2.fromOffset(size, size),
+			Parent = parent,
+		})
+		local self = setmetatable({ Frame = container, _parts = {} }, Icon)
+
+		local value = icon
+		if type(value) == "string" and registry[value] ~= nil then
+			value = registry[value]
+		end
+		if type(value) == "number" then
+			value = "rbxassetid://" .. tostring(value)
+		end
+		if type(value) == "string" and not isDirect(value) then
+			value = resolve(value)
+		end
+
+		local properties = nil
+		if type(value) == "string" then
+			properties = { Image = value }
+		elseif type(value) == "table" and value.Image then
+			properties = {
+				Image = value.Image,
+				ImageRectOffset = value.ImageRectOffset or Vector2.zero,
+				ImageRectSize = value.ImageRectSize or Vector2.zero,
+			}
+		end
+
+		if properties then
+			properties.Name = "Image"
+			properties.Size = UDim2.fromScale(1, 1)
+			properties.ImageColor3 = color
+			properties.ScaleType = Enum.ScaleType.Fit
+			properties.Parent = container
+			local image = Utility.Create("ImageLabel", properties)
+			table.insert(self._parts, { Instance = image, Property = "ImageColor3" })
+		end
+
+		return self
+	end
+
+	function Icon:SetColor(color, animated)
+		for _, part in ipairs(self._parts) do
+			Animation.Set(part.Instance, "Hover", { [part.Property] = color }, animated)
+		end
+	end
+
+	function Icon:Destroy()
+		self.Frame:Destroy()
+	end
+
+	return Icons
+end)()
+
+local Overlay = (function()
+	local UserInputService = game:GetService("UserInputService")
+
+
+	local Overlay = {}
+	Overlay.__index = Overlay
+
+	function Overlay.new(root, uiScale, janitor)
+		local self = setmetatable({}, Overlay)
+		self.Root = root
+		self.Scale = uiScale
+		self._current = nil
+
+		self.Layer = Utility.Create("Frame", {
+			Name = "Overlay",
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 20,
+			Parent = root,
+		})
+
+		self.Blocker = Utility.Create("TextButton", {
+			Name = "Blocker",
+			Position = UDim2.fromOffset(-5000, -5000),
+			Size = UDim2.fromOffset(10000, 10000),
+			Visible = false,
+			ZIndex = 1,
+			Parent = self.Layer,
+		})
+
+		janitor:Add(self.Blocker.Activated:Connect(function()
+			self:Dismiss()
+		end))
+
+		janitor:Add(UserInputService.InputBegan:Connect(function(input)
+			if input.KeyCode == Enum.KeyCode.Escape and self._current then
+				self:Dismiss()
+			end
+		end))
+
+		return self
+	end
+
+	function Overlay:IsOpen()
+		return self._current ~= nil
+	end
+
+	function Overlay:Open(owner, anchor, popup, size, gap)
+		self:Dismiss()
+
+		local scale = math.max(self.Scale.Scale, 0.01)
+		local rootPosition = self.Root.AbsolutePosition
+		local bounds = self.Root.AbsoluteSize / scale
+		local anchorPosition = (anchor.AbsolutePosition - rootPosition) / scale
+		local anchorSize = anchor.AbsoluteSize / scale
+
+		local x = anchorPosition.X + anchorSize.X - size.X
+		x = math.clamp(x, 8, math.max(8, bounds.X - size.X - 8))
+
+		local below = anchorPosition.Y + anchorSize.Y + gap
+		local fitsDown = below + size.Y <= bounds.Y - 8
+		local fitsUp = anchorPosition.Y - gap - size.Y >= 8
+		local opensDown = fitsDown or not fitsUp
+
+		if opensDown then
+			popup.AnchorPoint = Vector2.new(0, 0)
+			popup.Position = UDim2.fromOffset(x, below)
+		else
+			popup.AnchorPoint = Vector2.new(0, 1)
+			popup.Position = UDim2.fromOffset(x, anchorPosition.Y - gap)
+		end
+
+		popup.Parent = self.Layer
+		self.Blocker.Visible = true
+		self._current = owner
+
+		return opensDown and "Down" or "Up"
+	end
+
+	function Overlay:Release(owner)
+		if self._current == owner then
+			self._current = nil
+			self.Blocker.Visible = false
+		end
+	end
+
+	function Overlay:Dismiss()
+		local current = self._current
+		if current then
+			self._current = nil
+			self.Blocker.Visible = false
+			current:Close()
+		end
+	end
+
+	return Overlay
+end)()
+
+local Row = (function()
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Row = {}
+
+	function Row.Build(section, config)
+		local context = section:CreateContext()
+		local scope = context.Scope
+		local janitor = context.Janitor
+		local name = config.Name or "Row"
+		local description = config.Description
+		local controlWidth = config.ControlWidth or 0
+
+		local frame = Utility.Create("Frame", {
+			Name = name,
+			Size = UDim2.new(1, 0, 0, Metrics.RowHeight),
+			LayoutOrder = section:NextOrder(),
+			Parent = section.Container,
+		})
+
+		local reserve = 0
+		if controlWidth > 0 then
+			reserve = controlWidth + 20
+		end
+
+		local column = Utility.Create("Frame", {
+			Name = "Text",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(0, 0.5),
+			Size = UDim2.new(1, -reserve, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Parent = frame,
+		})
+		Utility.List(column, 2)
+
+		local title = Utility.Create("TextLabel", {
+			Name = "Title",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Text = name,
+			TextSize = TextSizes.Body,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			LayoutOrder = 1,
+			Parent = column,
+		})
+		scope:Bind(title, { TextColor3 = "Text" })
+
+		local descriptionLabel = Utility.Create("TextLabel", {
+			Name = "Description",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Text = description or "",
+			TextSize = TextSizes.Small,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Visible = description ~= nil and description ~= "",
+			LayoutOrder = 2,
+			Parent = column,
+		})
+		scope:Bind(descriptionLabel, { TextColor3 = "TextSecondary" })
+
+		local control = nil
+		if controlWidth > 0 then
+			control = Utility.Create("Frame", {
+				Name = "Control",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.fromScale(1, 0.5),
+				Size = UDim2.new(0, controlWidth, 1, 0),
+				Parent = frame,
+			})
+		end
+
+		local separator = Utility.Create("Frame", {
+			Name = "Separator",
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.fromScale(0, 1),
+			Size = UDim2.new(1, 0, 0, 1),
+			BackgroundTransparency = 0.3,
+			Parent = frame,
+		})
+		scope:Bind(separator, { BackgroundColor3 = "Border" })
+
+		local shield = Utility.Create("TextButton", {
+			Name = "Shield",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Visible = false,
+			ZIndex = 10,
+			Parent = frame,
+		})
+		scope:Bind(shield, { BackgroundColor3 = "Window" })
+
+		local function measure()
+			local needed = column.AbsoluteSize.Y + Metrics.RowPadding * 2
+			frame.Size = UDim2.new(1, 0, 0, math.max(Metrics.RowHeight, needed))
+		end
+		janitor:Add(column:GetPropertyChangedSignal("AbsoluteSize"):Connect(measure))
+		task.defer(measure)
+
+		section:AddEntry(frame, name .. " " .. (description or ""))
+
+		return {
+			Frame = frame,
+			Title = title,
+			Description = descriptionLabel,
+			Control = control,
+			Separator = separator,
+			Shield = shield,
+			Janitor = janitor,
+			Scope = scope,
+			Disabled = false,
+		}
+	end
+
+	function Row.SetDisabled(refs, disabled)
+		refs.Disabled = disabled
+		local shield = refs.Shield
+		if disabled then
+			shield.Visible = true
+			Animation.Tween(shield, "Hover", { BackgroundTransparency = 0.45 })
+		else
+			local tween = Animation.Tween(shield, "Hover", { BackgroundTransparency = 1 })
+			tween.Completed:Once(function()
+				if not refs.Disabled then
+					shield.Visible = false
+				end
+			end)
+		end
+	end
+
+	function Row.SetTitle(refs, text)
+		refs.Title.Text = text
+	end
+
+	function Row.SetDescription(refs, text)
+		refs.Description.Text = text or ""
+		refs.Description.Visible = text ~= nil and text ~= ""
+	end
+
+	return Row
+end)()
+
+local Navigation = (function()
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Navigation = {}
+	Navigation.__index = Navigation
+
+	function Navigation.new(window, parent, onSelect)
+		local self = setmetatable({}, Navigation)
+		self.Window = window
+		self.Scope = window.Scope
+		self.Janitor = window.Janitor
+		self.Items = {}
+		self.Groups = {}
+		self.Selected = nil
+		self._onSelect = onSelect
+		self._focused = false
+
+		local scope = self.Scope
+		local janitor = self.Janitor
+		local searchTop = 14
+		local listTop = searchTop + Metrics.SearchHeight + 10
+
+		self.SearchFrame = Utility.Create("Frame", {
+			Name = "Search",
+			Position = UDim2.fromOffset(12, searchTop),
+			Size = UDim2.new(1, -24, 0, Metrics.SearchHeight),
+			BackgroundTransparency = 0,
+			Parent = parent,
+		})
+		scope:Bind(self.SearchFrame, { BackgroundColor3 = "Surface" })
+		Utility.Corner(self.SearchFrame, 10)
+		self._searchStroke = Utility.Stroke(self.SearchFrame, 1)
+
+		self._searchIcon = Icons.Create(self.SearchFrame, "search", 16, Color3.new(1, 1, 1))
+		self._searchIcon.Frame.AnchorPoint = Vector2.new(0, 0.5)
+		self._searchIcon.Frame.Position = UDim2.new(0, 12, 0.5, 0)
+
+		self.SearchBox = Utility.Create("TextBox", {
+			Name = "Input",
+			Position = UDim2.fromOffset(38, 0),
+			Size = UDim2.new(1, -50, 1, 0),
+			PlaceholderText = "Search…",
+			TextSize = TextSizes.Body,
+			Parent = self.SearchFrame,
+		})
+		scope:Bind(self.SearchBox, { TextColor3 = "Text", PlaceholderColor3 = "TextMuted" })
+
+		self.Scroll = Utility.Create("ScrollingFrame", {
+			Name = "Items",
+			Position = UDim2.fromOffset(0, listTop),
+			Size = UDim2.new(1, 0, 1, -listTop),
+			ScrollBarThickness = 3,
+			Parent = parent,
+		})
+		scope:Bind(self.Scroll, { ScrollBarImageColor3 = "Selected" })
+		Utility.Padding(self.Scroll, 4, 12, 14, 12)
+		Utility.List(self.Scroll, 2)
+
+		self.Empty = Utility.Create("TextLabel", {
+			Name = "Empty",
+			Size = UDim2.new(1, 0, 0, 40),
+			Text = "No results",
+			TextSize = TextSizes.Control,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			Visible = false,
+			LayoutOrder = 1000000,
+			Parent = self.Scroll,
+		})
+		scope:Bind(self.Empty, { TextColor3 = "TextMuted" })
+
+		local function renderSearch(animated)
+			local colors = scope:Colors()
+			local strokeColor = colors.Border
+			local iconColor = colors.TextMuted
+			if self._focused then
+				strokeColor = colors.TextMuted
+				iconColor = colors.TextSecondary
+			end
+			Animation.Set(self._searchStroke, "Hover", { Color = strokeColor }, animated)
+			self._searchIcon:SetColor(iconColor, animated)
+		end
+
+		janitor:Add(self.SearchBox.Focused:Connect(function()
+			self._focused = true
+			renderSearch(true)
+		end))
+
+		janitor:Add(self.SearchBox.FocusLost:Connect(function(enterPressed)
+			self._focused = false
+			renderSearch(true)
+			if enterPressed then
+				self:_selectFirstVisible()
+			end
+		end))
+
+		janitor:Add(self.SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			self:Search(self.SearchBox.Text)
+		end))
+
+		scope:Watch(function(_, animated)
+			renderSearch(animated)
+			for _, item in ipairs(self.Items) do
+				self:_render(item, animated)
+			end
+		end)
+
+		return self
+	end
+
+	function Navigation:_group(name)
+		name = name or ""
+		for _, group in ipairs(self.Groups) do
+			if group.Name == name then
+				return group
+			end
+		end
+
+		local scope = self.Scope
+		local index = #self.Groups + 1
+		local group = { Name = name, Index = index, Items = {} }
+
+		if index > 1 then
+			local separator = Utility.Create("Frame", {
+				Name = "Separator",
+				Size = UDim2.new(1, 0, 0, 19),
+				LayoutOrder = index * 1000 - 1,
+				Parent = self.Scroll,
+			})
+			local lineFrame = Utility.Create("Frame", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 6, 0.5, 0),
+				Size = UDim2.new(1, -12, 0, 1),
+				BackgroundTransparency = 0,
+				Parent = separator,
+			})
+			scope:Bind(lineFrame, { BackgroundColor3 = "Border" })
+			group.Separator = separator
+		end
+
+		if name ~= "" then
+			local header = Utility.Create("TextLabel", {
+				Name = "Header_" .. name,
+				Size = UDim2.new(1, 0, 0, Metrics.NavHeaderHeight),
+				Text = name,
+				FontFace = Constants.Fonts.Medium,
+				TextSize = TextSizes.Control,
+				LayoutOrder = index * 1000,
+				Parent = self.Scroll,
+			})
+			Utility.Padding(header, 0, 0, 0, 6)
+			scope:Bind(header, { TextColor3 = "TextMuted" })
+			group.Header = header
+		end
+
+		self.Groups[index] = group
+		return group
+	end
+
+	function Navigation:AddItem(config)
+		local group = self:_group(config.Group)
+		local order = group.Index * 1000 + #group.Items + 1
+		local hasIcon = config.Icon ~= nil
+
+		local button = Utility.Create("TextButton", {
+			Name = config.Name,
+			Size = UDim2.new(1, 0, 0, Metrics.NavItemHeight),
+			BackgroundTransparency = 1,
+			LayoutOrder = order,
+			Parent = self.Scroll,
+		})
+		Utility.Corner(button, Metrics.ControlRadius)
+
+		local item = {
+			Name = config.Name,
+			Page = config.Page,
+			Group = group,
+			Button = button,
+			Selected = false,
+			Hovered = false,
+			Pressed = false,
+			Visible = true,
+		}
+
+		if hasIcon then
+			item.Icon = Icons.Create(button, config.Icon, 18, Color3.new(1, 1, 1))
+			item.Icon.Frame.AnchorPoint = Vector2.new(0, 0.5)
+			item.Icon.Frame.Position = UDim2.new(0, 12, 0.5, 0)
+		end
+
+		local labelOffset = hasIcon and 42 or 14
+		item.Label = Utility.Create("TextLabel", {
+			Name = "Label",
+			Position = UDim2.fromOffset(labelOffset, 0),
+			Size = UDim2.new(1, -(labelOffset + 8), 1, 0),
+			Text = config.Name,
+			TextSize = TextSizes.Body,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Parent = button,
+		})
+
+		table.insert(group.Items, item)
+		table.insert(self.Items, item)
+
+		Utility.Interact(button, self.Janitor, {
+			Hover = function(state)
+				item.Hovered = state
+				self:_render(item, true)
+			end,
+			Press = function(state)
+				item.Pressed = state
+				self:_render(item, true)
+			end,
+			Click = function()
+				self:Select(item)
+			end,
+		})
+
+		self:_render(item, false)
+		return item
+	end
+
+	function Navigation:_render(item, animated)
+		local colors = self.Scope:Colors()
+		local background = colors.Hover
+		local transparency = 1
+		local foreground = colors.Text:Lerp(colors.TextSecondary, 0.4)
+
+		if item.Selected then
+			background = colors.Selected
+			transparency = 0
+			foreground = colors.Text
+		elseif item.Pressed then
+			background = colors.Hover:Lerp(colors.Selected, 0.5)
+			transparency = 0
+			foreground = colors.Text
+		elseif item.Hovered then
+			background = colors.Hover
+			transparency = 0
+			foreground = colors.Text
+		end
+
+		Animation.Set(item.Button, "Hover", {
+			BackgroundColor3 = background,
+			BackgroundTransparency = transparency,
+		}, animated)
+		Animation.Set(item.Label, "Hover", { TextColor3 = foreground }, animated)
+		if item.Icon then
+			item.Icon:SetColor(foreground, animated)
+		end
+	end
+
+	function Navigation:Select(item)
+		if self.Selected == item then
+			return
+		end
+		local previous = self.Selected
+		self.Selected = item
+		if previous then
+			previous.Selected = false
+			self:_render(previous, true)
+		end
+		item.Selected = true
+		self:_render(item, previous ~= nil)
+		if self._onSelect then
+			self._onSelect(item, previous)
+		end
+	end
+
+	function Navigation:_selectFirstVisible()
+		for _, group in ipairs(self.Groups) do
+			for _, item in ipairs(group.Items) do
+				if item.Visible then
+					self:Select(item)
+					return
+				end
+			end
+		end
+	end
+
+	function Navigation:Search(rawQuery)
+		local query = Utility.Normalize(rawQuery)
+		local any = false
+
+		for _, item in ipairs(self.Items) do
+			local match = query == "" or Utility.Contains(item.Name, query) or item.Page:HasMatch(query)
+			item.Visible = match
+			item.Button.Visible = match
+			item.Page:Filter(query)
+			if match then
+				any = true
+			end
+		end
+
+		local shownBefore = false
+		for _, group in ipairs(self.Groups) do
+			local groupVisible = false
+			for _, item in ipairs(group.Items) do
+				if item.Visible then
+					groupVisible = true
+					break
+				end
+			end
+			if group.Header then
+				group.Header.Visible = groupVisible
+			end
+			if group.Separator then
+				group.Separator.Visible = groupVisible and shownBefore
+			end
+			if groupVisible then
+				shownBefore = true
+			end
+		end
+
+		self.Empty.Visible = not any
+
+		if self.Selected and not self.Selected.Visible then
+			self:_selectFirstVisible()
+		end
+	end
+
+	return Navigation
+end)()
+
+local Segmented = (function()
+	local TextSizes = Constants.TextSizes
+
+	local Segmented = {}
+	Segmented.__index = Segmented
+
+	local function normalizeOptions(options)
+		local result = {}
+		for _, option in ipairs(options) do
+			if type(option) == "table" then
+				table.insert(result, {
+					Value = option.Value,
+					Text = option.Text,
+					Icon = option.Icon,
+				})
+			else
+				table.insert(result, { Value = option, Text = tostring(option) })
+			end
+		end
+		return result
+	end
+
+	local function build(tab, config, options)
+		local padding = 4
+		local segmentHeight = 32
+		local segmentWidth = 44
+		for _, option in ipairs(options) do
+			if not option.Icon then
+				segmentWidth = 76
+			end
+		end
+
+		local refs = { Padding = padding, SegmentWidth = segmentWidth, SegmentHeight = segmentHeight, Segments = {} }
+
+		refs.Frame = Utility.Create("Frame", {
+			Name = "Segmented",
+			Size = UDim2.fromOffset(#options * segmentWidth + padding * 2, segmentHeight + padding * 2),
+			BackgroundTransparency = 0,
+			LayoutOrder = tab:NextOrder(),
+			Parent = tab.HeaderControls,
+		})
+		Utility.Corner(refs.Frame, 12)
+		refs.Stroke = Utility.Stroke(refs.Frame, 1)
+
+		refs.Indicator = Utility.Create("Frame", {
+			Name = "Indicator",
+			Position = UDim2.fromOffset(padding, padding),
+			Size = UDim2.fromOffset(segmentWidth, segmentHeight),
+			BackgroundTransparency = 0,
+			Parent = refs.Frame,
+		})
+		Utility.Corner(refs.Indicator, 9)
+
+		for index, option in ipairs(options) do
+			local button = Utility.Create("TextButton", {
+				Name = tostring(option.Value),
+				Position = UDim2.fromOffset(padding + (index - 1) * segmentWidth, padding),
+				Size = UDim2.fromOffset(segmentWidth, segmentHeight),
+				Parent = refs.Frame,
+			})
+			local segment = { Button = button, Option = option, Hover = false }
+			if option.Icon then
+				segment.Icon = Icons.Create(button, option.Icon, 18, Color3.new(1, 1, 1))
+				segment.Icon.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+				segment.Icon.Frame.Position = UDim2.fromScale(0.5, 0.5)
+			else
+				segment.Label = Utility.Create("TextLabel", {
+					Size = UDim2.fromScale(1, 1),
+					Text = option.Text or tostring(option.Value),
+					TextSize = TextSizes.Control,
+					TextXAlignment = Enum.TextXAlignment.Center,
+					Parent = button,
+				})
+			end
+			refs.Segments[index] = segment
+		end
+
+		return refs
+	end
+
+	function Segmented.new(tab, config)
+		config = Utility.Merge({ Options = {} }, config)
+		local options = normalizeOptions(config.Options)
+		local context = tab:CreateContext()
+		local refs = build(tab, config, options)
+
+		local self = setmetatable({}, Segmented)
+		self.Frame = refs.Frame
+		self.Options = options
+		self.Value = config.Default
+		self._refs = refs
+		self._context = context
+		self._callback = config.Callback
+
+		if self.Value == nil and options[1] then
+			self.Value = options[1].Value
+		end
+
+		context.Scope:Bind(refs.Frame, { BackgroundColor3 = "Surface" })
+		context.Scope:Bind(refs.Stroke, { Color = "Border" })
+		context.Scope:Bind(refs.Indicator, { BackgroundColor3 = "Selected" })
+
+		for index, segment in ipairs(refs.Segments) do
+			Utility.Interact(segment.Button, context.Janitor, {
+				Hover = function(state)
+					segment.Hover = state
+					self:_renderSegments(true)
+				end,
+				Click = function()
+					self:Set(options[index].Value)
+				end,
+			})
+		end
+
+		context.Scope:Watch(function(_, animated)
+			self:_renderSegments(animated)
+		end)
+		self:_moveIndicator(false)
+
+		return self
+	end
+
+	function Segmented:_indexOf(value)
+		for index, option in ipairs(self.Options) do
+			if option.Value == value then
+				return index
+			end
+		end
+		return nil
+	end
+
+	function Segmented:_moveIndicator(animated)
+		local index = self:_indexOf(self.Value)
+		if not index then
+			self._refs.Indicator.Visible = false
+			return
+		end
+		self._refs.Indicator.Visible = true
+		local x = self._refs.Padding + (index - 1) * self._refs.SegmentWidth
+		Animation.Set(self._refs.Indicator, "Toggle", { Position = UDim2.fromOffset(x, self._refs.Padding) }, animated)
+	end
+
+	function Segmented:_renderSegments(animated)
+		local colors = self._context.Scope:Colors()
+		for _, segment in ipairs(self._refs.Segments) do
+			local selected = segment.Option.Value == self.Value
+			local color = colors.TextSecondary
+			if selected or segment.Hover then
+				color = colors.Text
+			end
+			if segment.Icon then
+				segment.Icon:SetColor(color, animated)
+			else
+				Animation.Set(segment.Label, "Hover", { TextColor3 = color }, animated)
+			end
+		end
+	end
+
+	function Segmented:Set(value, silent)
+		if value == self.Value or not self:_indexOf(value) then
+			return
+		end
+		self.Value = value
+		self:_moveIndicator(true)
+		self:_renderSegments(true)
+		if not silent then
+			Utility.SafeCall(self._callback, value)
+		end
+	end
+
+	function Segmented:Get()
+		return self.Value
+	end
+
+	function Segmented:Destroy()
+		self._context.Janitor:Destroy()
+		self._context.Scope:Destroy()
+		self.Frame:Destroy()
+	end
+
+	return Segmented
+end)()
+
+local Section = (function()
+	local TextSizes = Constants.TextSizes
+
+	local Section = {}
+	Section.__index = Section
+
+	function Section.new(tab, config)
+		config = Utility.Merge({ Name = "Section" }, config)
+
+		local self = setmetatable({}, Section)
+		self.Tab = tab
+		self.Window = tab.Window
+		self.Janitor = tab.Janitor
+		self.Scope = tab.Scope
+		self.Name = config.Name
+		self._order = 0
+		self._entries = {}
+		self._searchName = string.lower(config.Name)
+
+		local scope = self.Scope
+
+		self.Frame = Utility.Create("Frame", {
+			Name = "Section_" .. config.Name,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = tab:NextOrder(),
+			Parent = tab.Scroll,
+		})
+		Utility.List(self.Frame, 0)
+
+		local header = Utility.Create("Frame", {
+			Name = "Header",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = 1,
+			Parent = self.Frame,
+		})
+		Utility.Padding(header, 18, 0, 0, 0)
+		Utility.List(header, 6)
+
+		local title = Utility.Create("TextLabel", {
+			Name = "Title",
+			Size = UDim2.new(1, 0, 0, 20),
+			Text = config.Name,
+			FontFace = Constants.Fonts.SemiBold,
+			TextSize = TextSizes.Header,
+			LayoutOrder = 1,
+			Parent = header,
+		})
+		scope:Bind(title, { TextColor3 = "TextSecondary" })
+
+		local hasDescription = config.Description ~= nil and config.Description ~= ""
+		self.DescriptionLabel = Utility.Create("TextLabel", {
+			Name = "Description",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Text = config.Description or "",
+			TextSize = TextSizes.Small,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Visible = hasDescription,
+			LayoutOrder = 2,
+			Parent = header,
+		})
+		scope:Bind(self.DescriptionLabel, { TextColor3 = "TextMuted" })
+
+		local line = Utility.Create("Frame", {
+			Name = "Line",
+			Size = UDim2.new(1, 0, 0, 1),
+			BackgroundTransparency = 0,
+			LayoutOrder = 3,
+			Parent = header,
+		})
+		scope:Bind(line, { BackgroundColor3 = "Border" })
+
+		self.Container = Utility.Create("Frame", {
+			Name = "Container",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = 2,
+			Parent = self.Frame,
+		})
+		Utility.List(self.Container, 0)
+
+		return self
+	end
+
+	function Section.RegisterComponent(name, module)
+		Section["Create" .. name] = function(self, config)
+			return module.new(self, config or {})
+		end
+	end
+
+	function Section:NextOrder()
+		self._order = self._order + 1
+		return self._order
+	end
+
+	function Section:CreateContext()
+		return self.Tab:CreateContext()
+	end
+
+	function Section:AddEntry(frame, terms)
+		table.insert(self._entries, { Frame = frame, Terms = string.lower(terms) })
+	end
+
+	function Section:HasMatch(query)
+		if string.find(self._searchName, query, 1, true) then
+			return true
+		end
+		for _, entry in ipairs(self._entries) do
+			if string.find(entry.Terms, query, 1, true) then
+				return true
+			end
+		end
+		return false
+	end
+
+	function Section:Filter(query, forceShow)
+		local sectionMatch = forceShow or query == "" or string.find(self._searchName, query, 1, true) ~= nil
+		local any = false
+		for _, entry in ipairs(self._entries) do
+			local show = sectionMatch or string.find(entry.Terms, query, 1, true) ~= nil
+			entry.Frame.Visible = show
+			if show then
+				any = true
+			end
+		end
+		self.Frame.Visible = any or sectionMatch
+	end
+
+	function Section:SetDescription(text)
+		self.DescriptionLabel.Text = text or ""
+		self.DescriptionLabel.Visible = text ~= nil and text ~= ""
+	end
+
+	function Section:Destroy()
+		self.Frame:Destroy()
+	end
+
+	return Section
+end)()
+
+local Tab = (function()
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Tab = {}
+	Tab.__index = Tab
+
+	function Tab.new(window, config)
+		config = Utility.Merge({ Name = "Tab" }, config)
+
+		local self = setmetatable({}, Tab)
+		self.Window = window
+		self.Janitor = window.Janitor
+		self.Scope = window.Scope
+		self.Name = config.Name
+		self.Sections = {}
+		self._order = 0
+		self._searchName = string.lower(config.Name)
+
+		local scope = self.Scope
+		local padding = Metrics.PagePadding
+		local hasDescription = config.Description ~= nil and config.Description ~= ""
+
+		self.Page = Utility.Create("CanvasGroup", {
+			Name = "Page_" .. config.Name,
+			Size = UDim2.fromScale(1, 1),
+			GroupTransparency = 1,
+			Visible = false,
+			Parent = window.Content,
+		})
+
+		self.Header = Utility.Create("Frame", {
+			Name = "Header",
+			Size = UDim2.new(1, 0, 0, Metrics.PageHeaderHeight),
+			Parent = self.Page,
+		})
+
+		self.TitleLabel = Utility.Create("TextLabel", {
+			Name = "Title",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, padding, 0.5, hasDescription and -10 or 0),
+			Size = UDim2.new(1, -(padding * 2 + 180), 0, 28),
+			Text = config.Title or config.Name,
+			FontFace = Constants.Fonts.SemiBold,
+			TextSize = TextSizes.PageTitle,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Parent = self.Header,
+		})
+		scope:Bind(self.TitleLabel, { TextColor3 = "Text" })
+
+		self.DescriptionLabel = Utility.Create("TextLabel", {
+			Name = "Description",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, padding, 0.5, 14),
+			Size = UDim2.new(1, -(padding * 2 + 180), 0, 18),
+			Text = config.Description or "",
+			TextSize = TextSizes.Small,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Visible = hasDescription,
+			Parent = self.Header,
+		})
+		scope:Bind(self.DescriptionLabel, { TextColor3 = "TextSecondary" })
+
+		self.HeaderControls = Utility.Create("Frame", {
+			Name = "Controls",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -padding, 0.5, 0),
+			Size = UDim2.new(),
+			AutomaticSize = Enum.AutomaticSize.XY,
+			Parent = self.Header,
+		})
+		Utility.List(self.HeaderControls, 8, {
+			FillDirection = Enum.FillDirection.Horizontal,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		})
+
+		self.Scroll = Utility.Create("ScrollingFrame", {
+			Name = "Scroll",
+			Position = UDim2.fromOffset(0, Metrics.PageHeaderHeight),
+			Size = UDim2.new(1, 0, 1, -Metrics.PageHeaderHeight),
+			Parent = self.Page,
+		})
+		scope:Bind(self.Scroll, { ScrollBarImageColor3 = "Selected" })
+		Utility.Padding(self.Scroll, 0, padding, 24, padding)
+		Utility.List(self.Scroll, 0)
+
+		self.Item = window.Navigation:AddItem({
+			Name = config.Name,
+			Icon = config.Icon,
+			Group = config.Group,
+			Page = self,
+		})
+
+		return self
+	end
+
+	function Tab:NextOrder()
+		self._order = self._order + 1
+		return self._order
+	end
+
+	function Tab:CreateContext()
+		local janitor = Janitor.new()
+		local scope = self.Scope:Child()
+		self.Janitor:Add(janitor)
+		janitor:Add(scope)
+		return { Janitor = janitor, Scope = scope }
+	end
+
+	function Tab:CreateSection(config)
+		local section = Section.new(self, config)
+		table.insert(self.Sections, section)
+		return section
+	end
+
+	function Tab:CreateSegmented(config)
+		return Segmented.new(self, config or {})
+	end
+
+	function Tab:SetTitle(text)
+		self.TitleLabel.Text = text
+	end
+
+	function Tab:SetDescription(text)
+		self.DescriptionLabel.Text = text or ""
+		self.DescriptionLabel.Visible = text ~= nil and text ~= ""
+		self.TitleLabel.Position = UDim2.new(0, Metrics.PagePadding, 0.5, self.DescriptionLabel.Visible and -10 or 0)
+	end
+
+	function Tab:Select()
+		self.Window:SelectTab(self)
+	end
+
+	function Tab:Show(animated)
+		self.Page.Visible = true
+		if animated then
+			self.Page.GroupTransparency = 1
+			self.Page.Position = UDim2.fromOffset(0, 8)
+			Animation.Tween(self.Page, "Tab", {
+				GroupTransparency = 0,
+				Position = UDim2.fromOffset(0, 0),
+			})
+		else
+			self.Page.GroupTransparency = 0
+			self.Page.Position = UDim2.fromOffset(0, 0)
+		end
+	end
+
+	function Tab:Hide()
+		self.Page.Visible = false
+	end
+
+	function Tab:HasMatch(query)
+		if string.find(self._searchName, query, 1, true) then
+			return true
+		end
+		for _, section in ipairs(self.Sections) do
+			if section:HasMatch(query) then
+				return true
+			end
+		end
+		return false
+	end
+
+	function Tab:Filter(query)
+		local tabMatch = query == "" or string.find(self._searchName, query, 1, true) ~= nil
+		for _, section in ipairs(self.Sections) do
+			section:Filter(query, tabMatch)
+		end
+	end
+
+	return Tab
+end)()
+
+local Window = (function()
+	local UserInputService = game:GetService("UserInputService")
+
+
+
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Window = {}
+	Window.__index = Window
+
+	function Window.new(library, config)
+		config = Utility.Merge({
+			Title = "Application",
+			Size = UDim2.fromOffset(1100, 760),
+			Draggable = true,
+			ClampToScreen = false,
+			Resizable = false,
+			ToggleKey = Enum.KeyCode.RightControl,
+			DestroyOnClose = false,
+			Visible = true,
+		}, config)
+
+		local theme = library.Theme
+		if config.Theme ~= nil then
+			if type(config.Theme) == "table" or theme:GetName() ~= config.Theme then
+				theme:Set(config.Theme)
+			end
+		end
+
+		local self = setmetatable({}, Window)
+		self.Library = library
+		self.Janitor = Janitor.new()
+		self.Scope = theme:CreateScope()
+		self.Janitor:Add(self.Scope)
+		self.Tabs = {}
+		self.ActiveTab = nil
+		self._open = false
+		self._token = 0
+		self._offset = Vector2.zero
+		self._listening = false
+		self._compact = nil
+		self._toggleKey = config.ToggleKey
+		self._config = config
+
+		local scope = self.Scope
+		local janitor = self.Janitor
+
+		self.Gui = Utility.Create("ScreenGui", {
+			Name = "RobloxUI",
+			ResetOnSpawn = false,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+			DisplayOrder = 100,
+			Parent = config.Parent or Utility.GetGuiParent(),
+		})
+		janitor:Add(self.Gui)
+
+		local viewport = self:_viewport()
+		local requested = config.Size
+		self._size = Vector2.new(
+			requested.X.Scale * viewport.X + requested.X.Offset,
+			requested.Y.Scale * viewport.Y + requested.Y.Offset
+		)
+		self._current = self._size
+
+		self.Root = Utility.Create("Frame", {
+			Name = "Root",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(self._size.X, self._size.Y),
+			Visible = false,
+			Parent = self.Gui,
+		})
+		self._scale = Utility.Create("UIScale", { Scale = 0.96, Parent = self.Root })
+
+		self.Frame = Utility.Create("CanvasGroup", {
+			Name = "Window",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 0,
+			GroupTransparency = 1,
+			ZIndex = 1,
+			Parent = self.Root,
+		})
+		scope:Bind(self.Frame, { BackgroundColor3 = "Window" })
+		Utility.Corner(self.Frame, Metrics.WindowRadius)
+
+		local outline = Utility.Create("Frame", {
+			Name = "Outline",
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 2,
+			Parent = self.Root,
+		})
+		Utility.Corner(outline, Metrics.WindowRadius)
+		self._outlineStroke = Utility.Stroke(outline, 1, 1)
+		scope:Bind(self._outlineStroke, { Color = "Border" })
+
+		self.Overlay = Overlay.new(self.Root, self._scale, janitor)
+
+		local topBar = Utility.Create("Frame", {
+			Name = "TopBar",
+			Size = UDim2.new(1, 0, 0, Metrics.TopBarHeight),
+			Parent = self.Frame,
+		})
+
+		local titleX = Metrics.PagePadding
+		if config.Icon ~= nil then
+			local logo = Icons.Create(topBar, config.Icon, 22, Color3.new(1, 1, 1))
+			logo.Frame.AnchorPoint = Vector2.new(0, 0.5)
+			logo.Frame.Position = UDim2.new(0, Metrics.PagePadding, 0.5, 0)
+			titleX = Metrics.PagePadding + 32
+			scope:Watch(function(colors, animated)
+				logo:SetColor(colors.Text, animated)
+			end)
+		end
+
+		self.TitleLabel = Utility.Create("TextLabel", {
+			Name = "Title",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, titleX, 0.5, 0),
+			Size = UDim2.new(1, -(titleX + 70), 0, 28),
+			Text = config.Title,
+			FontFace = Constants.Fonts.SemiBold,
+			TextSize = TextSizes.Title,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Parent = topBar,
+		})
+		scope:Bind(self.TitleLabel, { TextColor3 = "Text" })
+
+		local topLine = Utility.Create("Frame", {
+			Name = "Line",
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.fromScale(0, 1),
+			Size = UDim2.new(1, 0, 0, 1),
+			BackgroundTransparency = 0,
+			Parent = topBar,
+		})
+		scope:Bind(topLine, { BackgroundColor3 = "Border" })
+
+		local closeButton = Utility.Create("TextButton", {
+			Name = "Close",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -18, 0.5, 0),
+			Size = UDim2.fromOffset(34, 34),
+			Parent = topBar,
+		})
+		Utility.Corner(closeButton, Metrics.ControlRadius)
+		local closeScale = Utility.Create("UIScale", { Parent = closeButton })
+		local closeIcon = Icons.Create(closeButton, "close", 18, Color3.new(1, 1, 1))
+		closeIcon.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		closeIcon.Frame.Position = UDim2.fromScale(0.5, 0.5)
+
+		local closeState = { Hover = false, Press = false }
+		local function renderClose(animated)
+			local colors = scope:Colors()
+			local background = colors.Hover
+			if closeState.Press then
+				background = colors.Selected
+			end
+			local active = closeState.Hover or closeState.Press
+			Animation.Set(closeButton, "Hover", {
+				BackgroundColor3 = background,
+				BackgroundTransparency = active and 0 or 1,
+			}, animated)
+			closeIcon:SetColor(active and colors.Text or colors.TextSecondary, animated)
+			Animation.Set(closeScale, "Press", { Scale = closeState.Press and 0.9 or 1 }, animated)
+		end
+		Utility.Interact(closeButton, janitor, {
+			Hover = function(state)
+				closeState.Hover = state
+				renderClose(true)
+			end,
+			Press = function(state)
+				closeState.Press = state
+				renderClose(true)
+			end,
+			Click = function()
+				self:Close()
+			end,
+		})
+		scope:Watch(function(_, animated)
+			renderClose(animated)
+		end)
+
+		local body = Utility.Create("Frame", {
+			Name = "Body",
+			Position = UDim2.fromOffset(0, Metrics.TopBarHeight),
+			Size = UDim2.new(1, 0, 1, -Metrics.TopBarHeight),
+			Parent = self.Frame,
+		})
+
+		self.Sidebar = Utility.Create("Frame", {
+			Name = "Sidebar",
+			Size = UDim2.new(0, Metrics.SidebarWidth, 1, 0),
+			BackgroundTransparency = 0,
+			Parent = body,
+		})
+		scope:Bind(self.Sidebar, { BackgroundColor3 = "Sidebar" })
+
+		self.Divider = Utility.Create("Frame", {
+			Name = "Divider",
+			Position = UDim2.new(0, Metrics.SidebarWidth, 0, 0),
+			Size = UDim2.new(0, 1, 1, 0),
+			BackgroundTransparency = 0,
+			Parent = body,
+		})
+		scope:Bind(self.Divider, { BackgroundColor3 = "Border" })
+
+		self.Content = Utility.Create("Frame", {
+			Name = "Content",
+			Position = UDim2.new(0, Metrics.SidebarWidth + 1, 0, 0),
+			Size = UDim2.new(1, -(Metrics.SidebarWidth + 1), 1, 0),
+			ClipsDescendants = true,
+			Parent = body,
+		})
+
+		self.Navigation = Navigation.new(self, self.Sidebar, function(item, previous)
+			self.Overlay:Dismiss()
+			if previous and previous.Page then
+				previous.Page:Hide()
+			end
+			item.Page:Show(previous ~= nil)
+			self.ActiveTab = item.Page
+		end)
+
+		if config.Draggable then
+			local startOffset = Vector2.zero
+			Utility.Drag(topBar, janitor, {
+				Began = function()
+					self.Overlay:Dismiss()
+					startOffset = self._offset
+				end,
+				Changed = function(_, delta)
+					self._offset = startOffset + delta
+					self:_clamp()
+				end,
+			})
+		end
+
+		if config.Resizable then
+			local grip = Utility.Create("TextButton", {
+				Name = "Resize",
+				AnchorPoint = Vector2.new(1, 1),
+				Position = UDim2.fromScale(1, 1),
+				Size = UDim2.fromOffset(22, 22),
+				ZIndex = 10,
+				Parent = self.Frame,
+			})
+			local gripIcon = Icons.Create(grip, "grip", 16, Color3.new(1, 1, 1))
+			gripIcon.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+			gripIcon.Frame.Position = UDim2.fromScale(0.5, 0.5)
+			scope:Watch(function(colors, animated)
+				gripIcon:SetColor(colors.TextMuted, animated)
+			end)
+
+			local startSize = Vector2.zero
+			local startOffset = Vector2.zero
+			Utility.Drag(grip, janitor, {
+				Began = function()
+					self.Overlay:Dismiss()
+					startSize = self._current
+					startOffset = self._offset
+				end,
+				Changed = function(_, delta)
+					local newSize = Vector2.new(
+						math.max(startSize.X + delta.X, Metrics.MinWindowSize.X),
+						math.max(startSize.Y + delta.Y, Metrics.MinWindowSize.Y)
+					)
+					self._size = newSize
+					self._offset = startOffset + (newSize - startSize) / 2
+					self:_fit()
+				end,
+			})
+		end
+
+		local launcher = config.Launcher
+		if launcher == nil then
+			launcher = UserInputService.TouchEnabled
+		end
+		if launcher then
+			self:_buildLauncher()
+		end
+
+		janitor:Add(self.Gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			self:_fit()
+		end))
+
+		janitor:Add(UserInputService.InputBegan:Connect(function(input, processed)
+			if processed or self._listening then
+				return
+			end
+			if self._toggleKey ~= Enum.KeyCode.Unknown and input.KeyCode == self._toggleKey then
+				self:Toggle()
+			end
+		end))
+
+		self:_fit()
+		if config.Visible then
+			self:Open()
+		end
+
+		return self
+	end
+
+	function Window:_viewport()
+		local size = self.Gui.AbsoluteSize
+		if size.X < 1 or size.Y < 1 then
+			local camera = workspace.CurrentCamera
+			size = camera and camera.ViewportSize or Vector2.new(1280, 720)
+		end
+		return size
+	end
+
+	function Window:_buildLauncher()
+		local scope = self.Scope
+		self._launcher = Utility.Create("TextButton", {
+			Name = "Launcher",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 12, 0.5, 0),
+			Size = UDim2.fromOffset(44, 44),
+			BackgroundTransparency = 0,
+			Visible = false,
+			Parent = self.Gui,
+		})
+		scope:Bind(self._launcher, { BackgroundColor3 = "Surface" })
+		Utility.Corner(self._launcher, 12)
+		scope:Bind(Utility.Stroke(self._launcher, 1), { Color = "Border" })
+
+		local icon = Icons.Create(self._launcher, "settings", 22, Color3.new(1, 1, 1))
+		icon.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.Frame.Position = UDim2.fromScale(0.5, 0.5)
+		scope:Watch(function(colors, animated)
+			icon:SetColor(colors.Text, animated)
+		end)
+
+		local moved = false
+		local startPosition = Vector2.zero
+		Utility.Drag(self._launcher, self.Janitor, {
+			Began = function()
+				moved = false
+				local launcher = self._launcher
+				startPosition = launcher.AbsolutePosition - self.Gui.AbsolutePosition
+				launcher.AnchorPoint = Vector2.zero
+				launcher.Position = UDim2.fromOffset(startPosition.X, startPosition.Y)
+			end,
+			Changed = function(_, delta)
+				if not moved and delta.Magnitude < 6 then
+					return
+				end
+				moved = true
+				local viewport = self.Gui.AbsoluteSize
+				local launcher = self._launcher
+				local x = math.clamp(startPosition.X + delta.X, 0, math.max(viewport.X - launcher.AbsoluteSize.X, 0))
+				local y = math.clamp(startPosition.Y + delta.Y, 0, math.max(viewport.Y - launcher.AbsoluteSize.Y, 0))
+				launcher.Position = UDim2.fromOffset(x, y)
+			end,
+		})
+
+		self.Janitor:Add(self._launcher.Activated:Connect(function()
+			if moved then
+				return
+			end
+			self:Open()
+		end))
+	end
+
+	function Window:_applyLayout()
+		local compact = self._current.X < Metrics.CompactBreakpoint
+		if compact == self._compact then
+			return
+		end
+		self._compact = compact
+		local width = compact and Metrics.SidebarCompactWidth or Metrics.SidebarWidth
+		self.Sidebar.Size = UDim2.new(0, width, 1, 0)
+		self.Divider.Position = UDim2.new(0, width, 0, 0)
+		self.Content.Position = UDim2.new(0, width + 1, 0, 0)
+		self.Content.Size = UDim2.new(1, -(width + 1), 1, 0)
+	end
+
+	function Window:_fit()
+		local viewport = self:_viewport()
+		local maxX = viewport.X * Metrics.ScreenFraction
+		local maxY = viewport.Y * Metrics.ScreenFraction
+		local width = math.min(math.max(self._size.X, Metrics.MinWindowSize.X), maxX)
+		local height = math.min(math.max(self._size.Y, Metrics.MinWindowSize.Y), maxY)
+		self._current = Vector2.new(math.floor(width), math.floor(height))
+		self.Root.Size = UDim2.fromOffset(self._current.X, self._current.Y)
+		self:_applyLayout()
+		self:_clamp()
+	end
+
+	function Window:_clamp()
+		if self._config.ClampToScreen then
+			local viewport = self:_viewport()
+			local halfWidth = self._current.X / 2
+			local halfHeight = self._current.Y / 2
+			local limitX = math.max(viewport.X / 2 + halfWidth - 96, 1)
+			local minY = -viewport.Y / 2 + halfHeight
+			local maxY = math.max(viewport.Y / 2 - Metrics.TopBarHeight + halfHeight, minY)
+			self._offset = Vector2.new(
+				math.clamp(self._offset.X, -limitX, limitX),
+				math.clamp(self._offset.Y, minY, maxY)
+			)
+		end
+		self.Root.Position = UDim2.new(0.5, self._offset.X, 0.5, self._offset.Y)
+	end
+
+	function Window:ResetPosition()
+		self._offset = Vector2.zero
+		self:_clamp()
+	end
+
+	function Window:CreateTab(config)
+		local tab = Tab.new(self, config or {})
+		table.insert(self.Tabs, tab)
+		if not self.Navigation.Selected then
+			self:SelectTab(tab)
+		end
+		return tab
+	end
+
+	function Window:SelectTab(tab)
+		self.Navigation:Select(tab.Item)
+	end
+
+	function Window:Open()
+		if self._open then
+			return
+		end
+		self._open = true
+		self._token = self._token + 1
+		if not self.Root.Visible then
+			self._scale.Scale = 0.96
+			self.Frame.GroupTransparency = 1
+			self._outlineStroke.Transparency = 1
+			self.Root.Visible = true
+		end
+		if self._launcher then
+			self._launcher.Visible = false
+		end
+		Animation.Tween(self._scale, "Window", { Scale = 1 })
+		Animation.Tween(self.Frame, "Window", { GroupTransparency = 0 })
+		Animation.Tween(self._outlineStroke, "Window", { Transparency = 0 })
+	end
+
+	function Window:Close()
+		if not self._open then
+			return
+		end
+		self._open = false
+		self.Overlay:Dismiss()
+		self._token = self._token + 1
+		local token = self._token
+		Animation.Tween(self._scale, "Window", { Scale = 0.96 })
+		Animation.Tween(self._outlineStroke, "Window", { Transparency = 1 })
+		local fade = Animation.Tween(self.Frame, "Window", { GroupTransparency = 1 })
+		fade.Completed:Once(function()
+			if token == self._token then
+				self.Root.Visible = false
+			end
+		end)
+		if self._launcher then
+			self._launcher.Visible = true
+		end
+		Utility.SafeCall(self._config.OnClose)
+		if self._config.DestroyOnClose then
+			task.delay(Constants.Durations.Window + 0.05, function()
+				if token == self._token then
+					self:Destroy()
+				end
+			end)
+		end
+	end
+
+	function Window:Toggle()
+		if self._open then
+			self:Close()
+		else
+			self:Open()
+		end
+	end
+
+	function Window:IsOpen()
+		return self._open
+	end
+
+	function Window:SetTitle(text)
+		self.TitleLabel.Text = text
+	end
+
+	function Window:SetToggleKey(keyCode)
+		self._toggleKey = keyCode
+	end
+
+	function Window:GetToggleKey()
+		return self._toggleKey
+	end
+
+	function Window:SetKeybindListening(state)
+		if state then
+			self._listening = true
+		else
+			task.defer(function()
+				self._listening = false
+			end)
+		end
+	end
+
+	function Window:Notify(config)
+		return self.Library:Notify(config)
+	end
+
+	function Window:Destroy()
+		if self._destroyed then
+			return
+		end
+		self._destroyed = true
+		self.Janitor:Destroy()
+		self.Library:_removeWindow(self)
+	end
+
+	return Window
+end)()
+
+local Notification = (function()
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Notification = {}
+	Notification.__index = Notification
+
+	local typeKeys = {
+		info = "Info",
+		success = "Success",
+		warning = "Warning",
+		error = "Error",
+	}
+
+	function Notification.new(theme)
+		local self = setmetatable({}, Notification)
+		self.Theme = theme
+		self.Janitor = Janitor.new()
+		self.Scope = theme:CreateScope()
+		self.Janitor:Add(self.Scope)
+		self._active = {}
+		self._counter = 0
+
+		self.Gui = Utility.Create("ScreenGui", {
+			Name = "RobloxUI_Notifications",
+			ResetOnSpawn = false,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+			DisplayOrder = 1000,
+			Parent = Utility.GetGuiParent(),
+		})
+		self.Janitor:Add(self.Gui)
+
+		self.Holder = Utility.Create("Frame", {
+			Name = "Holder",
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -20, 1, -20),
+			Size = UDim2.new(0, Metrics.NotificationWidth, 1, -40),
+			Parent = self.Gui,
+		})
+		Utility.List(self.Holder, 0, { VerticalAlignment = Enum.VerticalAlignment.Bottom })
+
+		return self
+	end
+
+	function Notification:Push(config)
+		config = Utility.Merge({
+			Title = "Notification",
+			Content = "",
+			Duration = 4,
+			Type = "Info",
+		}, config)
+
+		self._counter = self._counter + 1
+		local scope = self.Theme:CreateScope()
+		local typeKey = typeKeys[string.lower(tostring(config.Type))] or "Info"
+		local offscreen = UDim2.fromOffset(Metrics.NotificationWidth + 40, 0)
+
+		local wrapper = Utility.Create("Frame", {
+			Name = "Toast",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = self._counter,
+			Parent = self.Holder,
+		})
+		Utility.Padding(wrapper, 0, 0, 8, 0)
+
+		local toast = Utility.Create("Frame", {
+			Name = "Body",
+			Position = offscreen,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 0,
+			Parent = wrapper,
+		})
+		scope:Bind(toast, { BackgroundColor3 = "Surface" })
+		Utility.Corner(toast, 12)
+		scope:Bind(Utility.Stroke(toast, 1), { Color = "Border" })
+		Utility.Padding(toast, 14, 16, 14, 16)
+		Utility.List(toast, 4)
+
+		local header = Utility.Create("Frame", {
+			Name = "Header",
+			Size = UDim2.new(1, 0, 0, 18),
+			LayoutOrder = 1,
+			Parent = toast,
+		})
+
+		local dot = Utility.Create("Frame", {
+			Name = "Dot",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(0, 0.5),
+			Size = UDim2.fromOffset(8, 8),
+			BackgroundTransparency = 0,
+			Parent = header,
+		})
+		Utility.Corner(dot, 4)
+		scope:Bind(dot, { BackgroundColor3 = typeKey })
+
+		local title = Utility.Create("TextLabel", {
+			Name = "Title",
+			Position = UDim2.fromOffset(16, 0),
+			Size = UDim2.new(1, -16, 1, 0),
+			Text = tostring(config.Title),
+			FontFace = Constants.Fonts.SemiBold,
+			TextSize = TextSizes.Body,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Parent = header,
+		})
+		scope:Bind(title, { TextColor3 = "Text" })
+
+		local hasContent = config.Content ~= nil and config.Content ~= ""
+		local content = Utility.Create("TextLabel", {
+			Name = "Content",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Text = tostring(config.Content or ""),
+			TextSize = TextSizes.Control,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Visible = hasContent,
+			LayoutOrder = 2,
+			Parent = toast,
+		})
+		scope:Bind(content, { TextColor3 = "TextSecondary" })
+
+		local dismissed = false
+		local handle = {}
+
+		local function dismiss()
+			if dismissed then
+				return
+			end
+			dismissed = true
+			local height = wrapper.AbsoluteSize.Y
+			local slide = Animation.Tween(toast, "Notification", { Position = offscreen })
+			slide.Completed:Once(function()
+				wrapper.AutomaticSize = Enum.AutomaticSize.None
+				wrapper.Size = UDim2.new(1, 0, 0, height)
+				wrapper.ClipsDescendants = true
+				local collapse = Animation.Tween(wrapper, "Notification", { Size = UDim2.new(1, 0, 0, 0) })
+				collapse.Completed:Once(function()
+					scope:Destroy()
+					wrapper:Destroy()
+					local index = table.find(self._active, handle)
+					if index then
+						table.remove(self._active, index)
+					end
+				end)
+			end)
+		end
+
+		handle.Dismiss = dismiss
+		table.insert(self._active, handle)
+
+		toast.InputBegan:Connect(function(input)
+			if Utility.IsPrimaryInput(input) then
+				Utility.SafeCall(config.Callback)
+				dismiss()
+			end
+		end)
+
+		Animation.Tween(toast, "Notification", { Position = UDim2.fromOffset(0, 0) })
+
+		local duration = tonumber(config.Duration)
+		if duration and duration > 0 and duration < math.huge then
+			task.delay(duration, dismiss)
+		end
+
+		while #self._active > Metrics.NotificationMax do
+			local oldest = table.remove(self._active, 1)
+			oldest.Dismiss()
+		end
+
+		return handle
+	end
+
+	function Notification:Destroy()
+		self.Janitor:Destroy()
+	end
+
+	return Notification
+end)()
+
+local Toggle = (function()
+	local Metrics = Constants.Metrics
+
+	local Toggle = {}
+	Toggle.__index = Toggle
+
+	local function build(section, config)
+		local refs = Row.Build(section, {
+			Name = config.Name,
+			Description = config.Description,
+			ControlWidth = Metrics.ToggleWidth + 8,
+		})
+		refs.Track = Utility.Create("TextButton", {
+			Name = "Track",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(1, 0.5),
+			Size = UDim2.fromOffset(Metrics.ToggleWidth, Metrics.ToggleHeight),
+			BackgroundTransparency = 0,
+			Parent = refs.Control,
+		})
+		Utility.Corner(refs.Track, Metrics.ToggleHeight / 2)
+		refs.Knob = Utility.Create("Frame", {
+			Name = "Knob",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 3, 0.5, 0),
+			Size = UDim2.fromOffset(20, 20),
+			BackgroundTransparency = 0,
+			Parent = refs.Track,
+		})
+		Utility.Corner(refs.Knob, 10)
+		return refs
+	end
+
+	function Toggle.new(section, config)
+		config = Utility.Merge({ Name = "Toggle", Default = false, Disabled = false }, config)
+		local refs = build(section, config)
+
+		local self = setmetatable({}, Toggle)
+		self.Frame = refs.Frame
+		self.Value = config.Default == true
+		self._refs = refs
+		self._callback = config.Callback
+		self._hover = false
+		self._press = false
+
+		Utility.Interact(refs.Track, refs.Janitor, {
+			Hover = function(state)
+				self._hover = state
+				self:_render(true)
+			end,
+			Press = function(state)
+				self._press = state
+				self:_render(true)
+			end,
+			Click = function()
+				self:Set(not self.Value)
+			end,
+		})
+
+		refs.Scope:Watch(function(_, animated)
+			self:_render(animated)
+		end)
+
+		if config.Disabled then
+			self:SetDisabled(true)
+		end
+
+		return self
+	end
+
+	function Toggle:_render(animated)
+		local colors = self._refs.Scope:Colors()
+		local on = self.Value
+		local track = on and colors.ToggleOn or colors.ToggleOff
+		if self._hover then
+			track = track:Lerp(colors.Text, 0.1)
+		end
+		local width = self._press and 24 or 20
+		local x = on and (Metrics.ToggleWidth - 3 - width) or 3
+		Animation.Set(self._refs.Track, "Toggle", { BackgroundColor3 = track }, animated)
+		Animation.Set(self._refs.Knob, "Toggle", {
+			BackgroundColor3 = on and colors.KnobOn or colors.KnobOff,
+			Position = UDim2.new(0, x, 0.5, 0),
+			Size = UDim2.fromOffset(width, 20),
+		}, animated)
+	end
+
+	function Toggle:Set(value, silent)
+		value = value == true
+		if value == self.Value then
+			return
+		end
+		self.Value = value
+		self:_render(true)
+		if not silent then
+			Utility.SafeCall(self._callback, value)
+		end
+	end
+
+	function Toggle:Get()
+		return self.Value
+	end
+
+	function Toggle:SetDisabled(disabled)
+		Row.SetDisabled(self._refs, disabled)
+	end
+
+	function Toggle:SetName(text)
+		Row.SetTitle(self._refs, text)
+	end
+
+	function Toggle:SetDescription(text)
+		Row.SetDescription(self._refs, text)
+	end
+
+	function Toggle:Destroy()
+		self._refs.Janitor:Destroy()
+		self._refs.Scope:Destroy()
+		self._refs.Frame:Destroy()
+	end
+
+	return Toggle
+end)()
+
+local Dropdown = (function()
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Dropdown = {}
+	Dropdown.__index = Dropdown
+
+	local function build(section, config)
+		local refs = Row.Build(section, {
+			Name = config.Name,
+			Description = config.Description,
+			ControlWidth = config.Width,
+		})
+
+		refs.Button = Utility.Create("TextButton", {
+			Name = "Button",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(1, 0.5),
+			Size = UDim2.fromOffset(config.Width, Metrics.ControlHeight),
+			BackgroundTransparency = 0,
+			Parent = refs.Control,
+		})
+		Utility.Corner(refs.Button, Metrics.ControlRadius)
+		refs.ButtonStroke = Utility.Stroke(refs.Button, 1, 0.5)
+
+		refs.Label = Utility.Create("TextLabel", {
+			Name = "Value",
+			Position = UDim2.fromOffset(14, 0),
+			Size = UDim2.new(1, -42, 1, 0),
+			TextSize = TextSizes.Control,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Parent = refs.Button,
+		})
+
+		refs.Chevron = Icons.Create(refs.Button, "chevron-down", 16, Color3.new(1, 1, 1))
+		refs.Chevron.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		refs.Chevron.Frame.Position = UDim2.new(1, -18, 0.5, 0)
+
+		refs.Popup = Utility.Create("Frame", {
+			Name = "Dropdown",
+			BackgroundTransparency = 0,
+			ClipsDescendants = true,
+			ZIndex = 2,
+		})
+		Utility.Corner(refs.Popup, Metrics.PopupRadius)
+		refs.PopupStroke = Utility.Stroke(refs.Popup, 1)
+
+		refs.List = Utility.Create("ScrollingFrame", {
+			Name = "Options",
+			ScrollBarThickness = 3,
+			Parent = refs.Popup,
+		})
+		Utility.Padding(refs.List, Metrics.PopupPadding, Metrics.PopupPadding, Metrics.PopupPadding, Metrics.PopupPadding)
+		Utility.List(refs.List, 2)
+
+		return refs
+	end
+
+	function Dropdown.new(section, config)
+		config = Utility.Merge({
+			Name = "Dropdown",
+			Options = {},
+			Width = 148,
+			Disabled = false,
+		}, config)
+		local refs = build(section, config)
+
+		local self = setmetatable({}, Dropdown)
+		self.Frame = refs.Frame
+		self.Options = {}
+		self.Value = nil
+		self._refs = refs
+		self._width = config.Width
+		self._window = section.Window
+		self._callback = config.Callback
+		self._optionsJanitor = Janitor.new()
+		refs.Janitor:Add(self._optionsJanitor)
+		self._items = {}
+		self._open = false
+		self._hover = false
+		self._press = false
+
+		for _, option in ipairs(config.Options) do
+			table.insert(self.Options, tostring(option))
+		end
+		if config.Default ~= nil and table.find(self.Options, tostring(config.Default)) then
+			self.Value = tostring(config.Default)
+		else
+			self.Value = self.Options[1]
+		end
+
+		Utility.Interact(refs.Button, refs.Janitor, {
+			Hover = function(state)
+				self._hover = state
+				self:_render(true)
+			end,
+			Press = function(state)
+				self._press = state
+				self:_render(true)
+			end,
+			Click = function()
+				if self._open then
+					self:Close()
+				else
+					self:Open()
+				end
+			end,
+		})
+
+		self:_buildOptions()
+		refs.Scope:Watch(function(_, animated)
+			self:_render(animated)
+		end)
+
+		if config.Disabled then
+			self:SetDisabled(true)
+		end
+
+		return self
+	end
+
+	function Dropdown:_popupHeight()
+		local count = #self.Options
+		local visible = math.min(count, Metrics.PopupMaxOptions)
+		return visible * Metrics.OptionHeight + math.max(visible - 1, 0) * 2 + Metrics.PopupPadding * 2
+	end
+
+	function Dropdown:_buildOptions()
+		local refs = self._refs
+		self._optionsJanitor:Cleanup()
+		for _, child in ipairs(refs.List:GetChildren()) do
+			if child:IsA("TextButton") then
+				child:Destroy()
+			end
+		end
+		self._items = {}
+
+		for index, option in ipairs(self.Options) do
+			local button = Utility.Create("TextButton", {
+				Name = option,
+				Size = UDim2.new(1, 0, 0, Metrics.OptionHeight),
+				LayoutOrder = index,
+				Parent = refs.List,
+			})
+			Utility.Corner(button, 6)
+
+			local label = Utility.Create("TextLabel", {
+				Position = UDim2.fromOffset(10, 0),
+				Size = UDim2.new(1, -36, 1, 0),
+				Text = option,
+				TextSize = TextSizes.Control,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				Parent = button,
+			})
+
+			local check = Icons.Create(button, "check", 14, Color3.new(1, 1, 1))
+			check.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+			check.Frame.Position = UDim2.new(1, -16, 0.5, 0)
+
+			local item = { Button = button, Label = label, Check = check, Option = option, Hover = false }
+			Utility.Interact(button, self._optionsJanitor, {
+				Hover = function(state)
+					item.Hover = state
+					self:_renderItem(item, true)
+				end,
+				Click = function()
+					self:Close()
+					self:Set(option)
+				end,
+			})
+			self._items[index] = item
+			self:_renderItem(item, false)
+		end
+	end
+
+	function Dropdown:_renderItem(item, animated)
+		local colors = self._refs.Scope:Colors()
+		local selected = item.Option == self.Value
+		local background = colors.Hover
+		local transparency = 1
+		local foreground = colors.TextSecondary
+
+		if item.Hover then
+			transparency = 0
+			foreground = colors.Text
+		elseif selected then
+			background = colors.Selected
+			transparency = 0.35
+			foreground = colors.Text
+		end
+
+		Animation.Set(item.Button, "Hover", {
+			BackgroundColor3 = background,
+			BackgroundTransparency = transparency,
+		}, animated)
+		Animation.Set(item.Label, "Hover", { TextColor3 = foreground }, animated)
+		item.Check.Frame.Visible = selected
+		item.Check:SetColor(colors.Text, false)
+	end
+
+	function Dropdown:_render(animated)
+		local refs = self._refs
+		local colors = refs.Scope:Colors()
+		local background = colors.Surface
+		if self._press then
+			background = colors.Selected
+		elseif self._hover or self._open then
+			background = colors.Hover
+		end
+
+		Animation.Set(refs.Button, "Hover", { BackgroundColor3 = background }, animated)
+		Animation.Set(refs.ButtonStroke, "Hover", { Color = colors.Border }, animated)
+		Animation.Set(refs.Label, "Hover", { TextColor3 = colors.Text }, animated)
+		refs.Chevron:SetColor(colors.TextSecondary, animated)
+		refs.Label.Text = self.Value or ""
+
+		refs.Popup.BackgroundColor3 = colors.Surface
+		refs.PopupStroke.Color = colors.Border
+		refs.List.ScrollBarImageColor3 = colors.Selected
+
+		for _, item in ipairs(self._items) do
+			self:_renderItem(item, animated)
+		end
+	end
+
+	function Dropdown:Open()
+		if self._open or self._refs.Disabled or #self.Options == 0 then
+			return
+		end
+		self._open = true
+
+		local refs = self._refs
+		local width = math.max(self._width, 150)
+		local height = self:_popupHeight()
+
+		refs.Popup.Size = UDim2.fromOffset(width, 0)
+		local direction = self._window.Overlay:Open(self, refs.Button, refs.Popup, Vector2.new(width, height), 6)
+
+		if direction == "Up" then
+			refs.List.AnchorPoint = Vector2.new(0, 1)
+			refs.List.Position = UDim2.fromScale(0, 1)
+		else
+			refs.List.AnchorPoint = Vector2.new(0, 0)
+			refs.List.Position = UDim2.fromScale(0, 0)
+		end
+		refs.List.Size = UDim2.new(1, 0, 0, height)
+
+		Animation.Tween(refs.Popup, "Dropdown", { Size = UDim2.fromOffset(width, height) })
+		Animation.Tween(refs.Chevron.Frame, "Dropdown", { Rotation = 180 })
+		self:_render(true)
+	end
+
+	function Dropdown:Close()
+		if not self._open then
+			return
+		end
+		self._open = false
+
+		local refs = self._refs
+		self._window.Overlay:Release(self)
+
+		local tween = Animation.Tween(refs.Popup, "Dropdown", { Size = UDim2.fromOffset(refs.Popup.Size.X.Offset, 0) })
+		tween.Completed:Once(function()
+			if not self._open then
+				refs.Popup.Parent = nil
+			end
+		end)
+		Animation.Tween(refs.Chevron.Frame, "Dropdown", { Rotation = 0 })
+		self:_render(true)
+	end
+
+	function Dropdown:Set(value, silent)
+		value = tostring(value)
+		if value == self.Value or not table.find(self.Options, value) then
+			return
+		end
+		self.Value = value
+		self:_render(true)
+		if not silent then
+			Utility.SafeCall(self._callback, value)
+		end
+	end
+
+	function Dropdown:Get()
+		return self.Value
+	end
+
+	function Dropdown:SetOptions(options, default)
+		self.Options = {}
+		for _, option in ipairs(options) do
+			table.insert(self.Options, tostring(option))
+		end
+		if default ~= nil and table.find(self.Options, tostring(default)) then
+			self.Value = tostring(default)
+		elseif not (self.Value and table.find(self.Options, self.Value)) then
+			self.Value = self.Options[1]
+		end
+		self:_buildOptions()
+		self:_render(false)
+	end
+
+	function Dropdown:SetDisabled(disabled)
+		if disabled then
+			self:Close()
+		end
+		Row.SetDisabled(self._refs, disabled)
+	end
+
+	function Dropdown:SetName(text)
+		Row.SetTitle(self._refs, text)
+	end
+
+	function Dropdown:Destroy()
+		self:Close()
+		self._refs.Popup:Destroy()
+		self._refs.Janitor:Destroy()
+		self._refs.Scope:Destroy()
+		self._refs.Frame:Destroy()
+	end
+
+	return Dropdown
+end)()
+
+local Slider = (function()
+	local TextSizes = Constants.TextSizes
+
+	local Slider = {}
+	Slider.__index = Slider
+
+	local function build(section, config)
+		local refs = Row.Build(section, {
+			Name = config.Name,
+			Description = config.Description,
+			ControlWidth = 300,
+		})
+
+		refs.ValueLabel = Utility.Create("TextLabel", {
+			Name = "Value",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(1, 0.5),
+			Size = UDim2.fromOffset(60, 20),
+			TextSize = TextSizes.Control,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Parent = refs.Control,
+		})
+
+		refs.Hit = Utility.Create("TextButton", {
+			Name = "Hit",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(0, 0.5),
+			Size = UDim2.new(1, -72, 0, 28),
+			Parent = refs.Control,
+		})
+
+		refs.Track = Utility.Create("Frame", {
+			Name = "Track",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 8, 0.5, 0),
+			Size = UDim2.new(1, -16, 0, 4),
+			BackgroundTransparency = 0,
+			Parent = refs.Hit,
+		})
+		Utility.Corner(refs.Track, 2)
+
+		refs.Fill = Utility.Create("Frame", {
+			Name = "Fill",
+			Size = UDim2.fromScale(0, 1),
+			BackgroundTransparency = 0,
+			Parent = refs.Track,
+		})
+		Utility.Corner(refs.Fill, 2)
+
+		refs.Thumb = Utility.Create("Frame", {
+			Name = "Thumb",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0, 0.5),
+			Size = UDim2.fromOffset(14, 14),
+			BackgroundTransparency = 0,
+			Parent = refs.Track,
+		})
+		Utility.Corner(refs.Thumb, 8)
+
+		return refs
+	end
+
+	function Slider.new(section, config)
+		config = Utility.Merge({
+			Name = "Slider",
+			Min = 0,
+			Max = 100,
+			Increment = 1,
+			Suffix = "",
+			Disabled = false,
+		}, config)
+		if config.Max <= config.Min then
+			config.Max = config.Min + 1
+		end
+		local refs = build(section, config)
+
+		local self = setmetatable({}, Slider)
+		self.Frame = refs.Frame
+		self.Min = config.Min
+		self.Max = config.Max
+		self.Increment = config.Increment
+		self.Suffix = config.Suffix
+		self._refs = refs
+		self._section = section
+		self._callback = config.Callback
+		self._hover = false
+		self._dragging = false
+		self.Value = self:_normalize(config.Default or config.Min)
+
+		Utility.Interact(refs.Hit, refs.Janitor, {
+			Hover = function(state)
+				self._hover = state
+				self:_render(true)
+			end,
+		})
+
+		Utility.Drag(refs.Hit, refs.Janitor, {
+			Began = function(position)
+				self._dragging = true
+				self._section.Tab.Scroll.ScrollingEnabled = false
+				self:_fromPosition(position)
+				self:_render(true)
+			end,
+			Changed = function(position)
+				self:_fromPosition(position)
+			end,
+			Ended = function()
+				self._dragging = false
+				self._section.Tab.Scroll.ScrollingEnabled = true
+				self:_render(true)
+			end,
+		})
+
+		refs.Scope:Watch(function(_, animated)
+			self:_render(animated)
+		end)
+
+		if config.Disabled then
+			self:SetDisabled(true)
+		end
+
+		return self
+	end
+
+	function Slider:_normalize(value)
+		local rounded = Utility.Round(value - self.Min, self.Increment) + self.Min
+		return math.clamp(rounded, self.Min, self.Max)
+	end
+
+	function Slider:_alpha()
+		return (self.Value - self.Min) / (self.Max - self.Min)
+	end
+
+	function Slider:_fromPosition(position)
+		local track = self._refs.Track
+		local alpha = math.clamp((position.X - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+		self:Set(self.Min + (self.Max - self.Min) * alpha, false, true)
+	end
+
+	function Slider:_render(animated)
+		local refs = self._refs
+		local colors = refs.Scope:Colors()
+		local alpha = self:_alpha()
+		local thumbSize = (self._dragging or self._hover) and 16 or 14
+
+		refs.Track.BackgroundColor3 = colors.Hover
+		refs.Fill.BackgroundColor3 = colors.Accent
+		refs.Thumb.BackgroundColor3 = colors.Accent
+		refs.ValueLabel.TextColor3 = self._dragging and colors.Text or colors.TextSecondary
+		refs.ValueLabel.Text = Utility.FormatNumber(self.Value) .. self.Suffix
+
+		Animation.Set(refs.Fill, "Hover", { Size = UDim2.fromScale(alpha, 1) }, animated and not self._dragging)
+		Animation.Set(refs.Thumb, "Hover", {
+			Position = UDim2.fromScale(alpha, 0.5),
+			Size = UDim2.fromOffset(thumbSize, thumbSize),
+		}, animated and not self._dragging)
+		if self._dragging then
+			refs.Thumb.Position = UDim2.fromScale(alpha, 0.5)
+			refs.Thumb.Size = UDim2.fromOffset(thumbSize, thumbSize)
+			refs.Fill.Size = UDim2.fromScale(alpha, 1)
+		end
+	end
+
+	function Slider:Set(value, silent, instant)
+		local normalized = self:_normalize(value)
+		if normalized == self.Value then
+			return
+		end
+		self.Value = normalized
+		self:_render(not instant)
+		if not silent then
+			Utility.SafeCall(self._callback, normalized)
+		end
+	end
+
+	function Slider:Get()
+		return self.Value
+	end
+
+	function Slider:SetRange(min, max)
+		self.Min = min
+		self.Max = math.max(max, min + 1)
+		self.Value = self:_normalize(self.Value)
+		self:_render(true)
+	end
+
+	function Slider:SetDisabled(disabled)
+		Row.SetDisabled(self._refs, disabled)
+	end
+
+	function Slider:SetName(text)
+		Row.SetTitle(self._refs, text)
+	end
+
+	function Slider:Destroy()
+		self._refs.Janitor:Destroy()
+		self._refs.Scope:Destroy()
+		self._refs.Frame:Destroy()
+	end
+
+	return Slider
+end)()
+
+local Button = (function()
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Button = {}
+	Button.__index = Button
+
+	local function build(section, config)
+		local refs = Row.Build(section, {
+			Name = config.Name,
+			Description = config.Description,
+			ControlWidth = config.Width,
+		})
+		refs.Button = Utility.Create("TextButton", {
+			Name = "Button",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(1, 0.5),
+			Size = UDim2.fromOffset(config.Width, Metrics.ControlHeight),
+			BackgroundTransparency = 0,
+			Text = config.ButtonText,
+			TextSize = TextSizes.Control,
+			FontFace = Constants.Fonts.Medium,
+			Parent = refs.Control,
+		})
+		Utility.Corner(refs.Button, Metrics.ControlRadius)
+		refs.Stroke = Utility.Stroke(refs.Button, 1, 0.5)
+		refs.Scale = Utility.Create("UIScale", { Parent = refs.Button })
+		return refs
+	end
+
+	function Button.new(section, config)
+		config = Utility.Merge({
+			Name = "Button",
+			ButtonText = "Run",
+			Width = 100,
+			Disabled = false,
+		}, config)
+		local refs = build(section, config)
+
+		local self = setmetatable({}, Button)
+		self.Frame = refs.Frame
+		self._refs = refs
+		self._callback = config.Callback
+		self._hover = false
+		self._press = false
+
+		Utility.Interact(refs.Button, refs.Janitor, {
+			Hover = function(state)
+				self._hover = state
+				self:_render(true)
+			end,
+			Press = function(state)
+				self._press = state
+				self:_render(true)
+			end,
+			Click = function()
+				self:Fire()
+			end,
+		})
+
+		refs.Scope:Watch(function(_, animated)
+			self:_render(animated)
+		end)
+
+		if config.Disabled then
+			self:SetDisabled(true)
+		end
+
+		return self
+	end
+
+	function Button:_render(animated)
+		local refs = self._refs
+		local colors = refs.Scope:Colors()
+		local background = colors.Surface
+		if self._press then
+			background = colors.Selected
+		elseif self._hover then
+			background = colors.Hover
+		end
+		Animation.Set(refs.Button, "Hover", {
+			BackgroundColor3 = background,
+			TextColor3 = colors.Text,
+		}, animated)
+		Animation.Set(refs.Stroke, "Hover", { Color = colors.Border }, animated)
+		Animation.Set(refs.Scale, "Press", { Scale = self._press and 0.96 or 1 }, animated)
+	end
+
+	function Button:Fire()
+		if self._refs.Disabled then
+			return
+		end
+		Utility.SafeCall(self._callback)
+	end
+
+	function Button:SetText(text)
+		self._refs.Button.Text = text
+	end
+
+	function Button:SetName(text)
+		Row.SetTitle(self._refs, text)
+	end
+
+	function Button:SetDescription(text)
+		Row.SetDescription(self._refs, text)
+	end
+
+	function Button:SetDisabled(disabled)
+		Row.SetDisabled(self._refs, disabled)
+	end
+
+	function Button:Destroy()
+		self._refs.Janitor:Destroy()
+		self._refs.Scope:Destroy()
+		self._refs.Frame:Destroy()
+	end
+
+	return Button
+end)()
+
+local Input = (function()
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Input = {}
+	Input.__index = Input
+
+	local function build(section, config)
+		local refs = Row.Build(section, {
+			Name = config.Name,
+			Description = config.Description,
+			ControlWidth = config.Width,
+		})
+		refs.Box = Utility.Create("Frame", {
+			Name = "Box",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(1, 0.5),
+			Size = UDim2.fromOffset(config.Width, Metrics.ControlHeight),
+			BackgroundTransparency = 0,
+			Parent = refs.Control,
+		})
+		Utility.Corner(refs.Box, Metrics.ControlRadius)
+		refs.Stroke = Utility.Stroke(refs.Box, 1, 0.5)
+		refs.TextBox = Utility.Create("TextBox", {
+			Name = "Input",
+			Position = UDim2.fromOffset(12, 0),
+			Size = UDim2.new(1, -24, 1, 0),
+			PlaceholderText = config.Placeholder,
+			ClearTextOnFocus = config.ClearOnFocus,
+			Text = config.Default,
+			TextSize = TextSizes.Control,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Parent = refs.Box,
+		})
+		return refs
+	end
+
+	function Input.new(section, config)
+		config = Utility.Merge({
+			Name = "Input",
+			Placeholder = "Enter text...",
+			Default = "",
+			ClearOnFocus = false,
+			Width = 220,
+			Live = false,
+			Disabled = false,
+		}, config)
+		local refs = build(section, config)
+
+		local self = setmetatable({}, Input)
+		self.Frame = refs.Frame
+		self.Value = config.Default
+		self._refs = refs
+		self._callback = config.Callback
+		self._validate = config.Validate
+		self._maxLength = config.MaxLength
+		self._live = config.Live
+		self._focused = false
+		self._hover = false
+		self._invalid = false
+
+		Utility.Interact(refs.Box, refs.Janitor, {
+			Hover = function(state)
+				self._hover = state
+				self:_render(true)
+			end,
+		})
+
+		refs.Janitor:Add(refs.TextBox.Focused:Connect(function()
+			self._focused = true
+			self:_render(true)
+		end))
+
+		refs.Janitor:Add(refs.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+			local text = refs.TextBox.Text
+			if self._maxLength and #text > self._maxLength then
+				refs.TextBox.Text = string.sub(text, 1, self._maxLength)
+				return
+			end
+			if self._live and self._focused then
+				self:_commit(text, false)
+			end
+		end))
+
+		refs.Janitor:Add(refs.TextBox.FocusLost:Connect(function(enterPressed)
+			self._focused = false
+			self:_commit(refs.TextBox.Text, enterPressed)
+			self:_render(true)
+		end))
+
+		refs.Scope:Watch(function(_, animated)
+			self:_render(animated)
+		end)
+
+		if config.Disabled then
+			self:SetDisabled(true)
+		end
+
+		return self
+	end
+
+	function Input:_commit(text, enterPressed)
+		if self._validate then
+			local ok, result = pcall(self._validate, text)
+			if not ok or result == false then
+				self._refs.TextBox.Text = self.Value
+				self:_flashInvalid()
+				return
+			end
+		end
+		if text == self.Value then
+			return
+		end
+		self.Value = text
+		Utility.SafeCall(self._callback, text, enterPressed)
+	end
+
+	function Input:_flashInvalid()
+		self._invalid = true
+		self:_render(true)
+		task.delay(0.6, function()
+			self._invalid = false
+			if self._refs.Box.Parent then
+				self:_render(true)
+			end
+		end)
+	end
+
+	function Input:_render(animated)
+		local refs = self._refs
+		local colors = refs.Scope:Colors()
+		local strokeColor = colors.Border
+		local strokeTransparency = 0.5
+		local background = colors.Surface
+		if self._invalid then
+			strokeColor = colors.Error
+			strokeTransparency = 0
+		elseif self._focused then
+			strokeColor = colors.TextMuted
+			strokeTransparency = 0
+		elseif self._hover then
+			background = colors.Hover
+		end
+		Animation.Set(refs.Box, "Hover", { BackgroundColor3 = background }, animated)
+		Animation.Set(refs.Stroke, "Hover", {
+			Color = strokeColor,
+			Transparency = strokeTransparency,
+		}, animated)
+		refs.TextBox.TextColor3 = colors.Text
+		refs.TextBox.PlaceholderColor3 = colors.TextMuted
+	end
+
+	function Input:Set(text, silent)
+		text = tostring(text)
+		self._refs.TextBox.Text = text
+		if text == self.Value then
+			return
+		end
+		self.Value = text
+		if not silent then
+			Utility.SafeCall(self._callback, text, false)
+		end
+	end
+
+	function Input:Get()
+		return self.Value
+	end
+
+	function Input:Focus()
+		self._refs.TextBox:CaptureFocus()
+	end
+
+	function Input:SetPlaceholder(text)
+		self._refs.TextBox.PlaceholderText = text
+	end
+
+	function Input:SetDisabled(disabled)
+		self._refs.TextBox.TextEditable = not disabled
+		Row.SetDisabled(self._refs, disabled)
+	end
+
+	function Input:SetName(text)
+		Row.SetTitle(self._refs, text)
+	end
+
+	function Input:Destroy()
+		self._refs.Janitor:Destroy()
+		self._refs.Scope:Destroy()
+		self._refs.Frame:Destroy()
+	end
+
+	return Input
+end)()
+
+local Keybind = (function()
+	local UserInputService = game:GetService("UserInputService")
+
+
+
+	local Metrics = Constants.Metrics
+	local TextSizes = Constants.TextSizes
+
+	local Keybind = {}
+	Keybind.__index = Keybind
+
+	local function build(section, config)
+		local refs = Row.Build(section, {
+			Name = config.Name,
+			Description = config.Description,
+			ControlWidth = config.Width,
+		})
+		refs.Button = Utility.Create("TextButton", {
+			Name = "Button",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(1, 0.5),
+			Size = UDim2.fromOffset(config.Width, Metrics.ControlHeight),
+			BackgroundTransparency = 0,
+			TextSize = TextSizes.Control,
+			Parent = refs.Control,
+		})
+		Utility.Corner(refs.Button, Metrics.ControlRadius)
+		refs.Stroke = Utility.Stroke(refs.Button, 1, 0.5)
+		return refs
+	end
+
+	function Keybind.new(section, config)
+		config = Utility.Merge({
+			Name = "Keybind",
+			Default = Enum.KeyCode.Unknown,
+			Width = 130,
+			Disabled = false,
+		}, config)
+		local refs = build(section, config)
+
+		local self = setmetatable({}, Keybind)
+		self.Frame = refs.Frame
+		self.Value = config.Default
+		self._refs = refs
+		self._window = section.Window
+		self._callback = config.Callback
+		self._onPressed = config.OnPressed
+		self._listening = false
+		self._hover = false
+		self._press = false
+
+		Utility.Interact(refs.Button, refs.Janitor, {
+			Hover = function(state)
+				self._hover = state
+				self:_render(true)
+			end,
+			Press = function(state)
+				self._press = state
+				self:_render(true)
+			end,
+			Click = function()
+				if self._listening then
+					self:_stopListening()
+				else
+					self:_startListening()
+				end
+			end,
+		})
+
+		refs.Janitor:Add(UserInputService.InputBegan:Connect(function(input, processed)
+			if self._listening then
+				if input.UserInputType == Enum.UserInputType.Keyboard then
+					if input.KeyCode == Enum.KeyCode.Escape then
+						self:_stopListening()
+					elseif input.KeyCode == Enum.KeyCode.Backspace then
+						self:_stopListening()
+						self:Set(Enum.KeyCode.Unknown)
+					else
+						self:_stopListening()
+						self:Set(input.KeyCode)
+					end
+				end
+				return
+			end
+			if processed or self._window._listening then
+				return
+			end
+			if self._onPressed and self.Value ~= Enum.KeyCode.Unknown and input.KeyCode == self.Value then
+				Utility.SafeCall(self._onPressed, self.Value)
+			end
+		end))
+
+		refs.Janitor:Add(function()
+			if self._listening then
+				self._window:SetKeybindListening(false)
+			end
+		end)
+
+		refs.Scope:Watch(function(_, animated)
+			self:_render(animated)
+		end)
+
+		if config.Disabled then
+			self:SetDisabled(true)
+		end
+
+		return self
+	end
+
+	function Keybind:_startListening()
+		self._listening = true
+		self._window:SetKeybindListening(true)
+		self:_render(true)
+	end
+
+	function Keybind:_stopListening()
+		if not self._listening then
+			return
+		end
+		self._listening = false
+		self._window:SetKeybindListening(false)
+		self:_render(true)
+	end
+
+	function Keybind:_render(animated)
+		local refs = self._refs
+		local colors = refs.Scope:Colors()
+		local background = colors.Surface
+		if self._press then
+			background = colors.Selected
+		elseif self._hover or self._listening then
+			background = colors.Hover
+		end
+		Animation.Set(refs.Button, "Hover", { BackgroundColor3 = background }, animated)
+		Animation.Set(refs.Stroke, "Hover", {
+			Color = self._listening and colors.TextMuted or colors.Border,
+			Transparency = self._listening and 0 or 0.5,
+		}, animated)
+		refs.Button.TextColor3 = self._listening and colors.TextSecondary or colors.Text
+		if self._listening then
+			refs.Button.Text = "Press a key…"
+		else
+			refs.Button.Text = Utility.KeyName(self.Value)
+		end
+	end
+
+	function Keybind:Set(keyCode, silent)
+		if keyCode == self.Value then
+			return
+		end
+		self.Value = keyCode
+		self:_render(true)
+		if not silent then
+			Utility.SafeCall(self._callback, keyCode)
+		end
+	end
+
+	function Keybind:Get()
+		return self.Value
+	end
+
+	function Keybind:SetDisabled(disabled)
+		if disabled then
+			self:_stopListening()
+		end
+		Row.SetDisabled(self._refs, disabled)
+	end
+
+	function Keybind:SetName(text)
+		Row.SetTitle(self._refs, text)
+	end
+
+	function Keybind:Destroy()
+		self._refs.Janitor:Destroy()
+		self._refs.Scope:Destroy()
+		self._refs.Frame:Destroy()
+	end
+
+	return Keybind
+end)()
+
+local Paragraph = (function()
+	local TextSizes = Constants.TextSizes
+
+	local Paragraph = {}
+	Paragraph.__index = Paragraph
+
+	function Paragraph.new(section, config)
+		config = Utility.Merge({ Title = "", Content = "", RichText = false }, config)
+		local context = section:CreateContext()
+		local scope = context.Scope
+
+		local frame = Utility.Create("Frame", {
+			Name = "Paragraph",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = section:NextOrder(),
+			Parent = section.Container,
+		})
+		Utility.Padding(frame, 8, 0, 8, 0)
+
+		local card = Utility.Create("Frame", {
+			Name = "Card",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 0,
+			Parent = frame,
+		})
+		scope:Bind(card, { BackgroundColor3 = "Surface" })
+		Utility.Corner(card, 10)
+		scope:Bind(Utility.Stroke(card, 1, 0.5), { Color = "Border" })
+		Utility.Padding(card, 14, 16, 14, 16)
+		Utility.List(card, 6)
+
+		local title = Utility.Create("TextLabel", {
+			Name = "Title",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Text = config.Title,
+			FontFace = Constants.Fonts.Medium,
+			TextSize = TextSizes.Body,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Visible = config.Title ~= "",
+			LayoutOrder = 1,
+			Parent = card,
+		})
+		scope:Bind(title, { TextColor3 = "Text" })
+
+		local content = Utility.Create("TextLabel", {
+			Name = "Content",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Text = config.Content,
+			RichText = config.RichText,
+			TextSize = TextSizes.Control,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			LayoutOrder = 2,
+			Parent = card,
+		})
+		scope:Bind(content, { TextColor3 = "TextSecondary" })
+
+		section:AddEntry(frame, config.Title .. " " .. config.Content)
+
+		local self = setmetatable({}, Paragraph)
+		self.Frame = frame
+		self._title = title
+		self._content = content
+		self._context = context
+		return self
+	end
+
+	function Paragraph:SetTitle(text)
+		self._title.Text = text
+		self._title.Visible = text ~= ""
+	end
+
+	function Paragraph:SetContent(text)
+		self._content.Text = text
+	end
+
+	function Paragraph:Destroy()
+		self._context.Janitor:Destroy()
+		self._context.Scope:Destroy()
+		self.Frame:Destroy()
+	end
+
+	return Paragraph
+end)()
+
+local Label = (function()
+	local TextSizes = Constants.TextSizes
+
+	local Label = {}
+	Label.__index = Label
+
+	local alignments = {
+		Left = Enum.TextXAlignment.Left,
+		Center = Enum.TextXAlignment.Center,
+		Right = Enum.TextXAlignment.Right,
+	}
+
+	function Label.new(section, config)
+		config = Utility.Merge({
+			Text = "Label",
+			TextSize = TextSizes.Body,
+			Weight = "Regular",
+			Color = "TextSecondary",
+			Alignment = "Left",
+		}, config)
+		local context = section:CreateContext()
+		local scope = context.Scope
+
+		local frame = Utility.Create("Frame", {
+			Name = "Label",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = section:NextOrder(),
+			Parent = section.Container,
+		})
+		Utility.Padding(frame, 10, 0, 10, 0)
+
+		local label = Utility.Create("TextLabel", {
+			Name = "Text",
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Text = config.Text,
+			FontFace = Constants.Fonts[config.Weight] or Constants.Fonts.Regular,
+			TextSize = config.TextSize,
+			TextWrapped = true,
+			TextXAlignment = alignments[config.Alignment] or Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Parent = frame,
+		})
+
+		local self = setmetatable({}, Label)
+		self.Frame = frame
+		self._label = label
+		self._context = context
+		self:SetColor(config.Color)
+
+		section:AddEntry(frame, config.Text)
+		return self
+	end
+
+	function Label:SetColor(color)
+		if typeof(color) == "Color3" then
+			self._label.TextColor3 = color
+		else
+			self._context.Scope:Bind(self._label, { TextColor3 = color })
+		end
+	end
+
+	function Label:SetText(text)
+		self._label.Text = text
+	end
+
+	function Label:Destroy()
+		self._context.Janitor:Destroy()
+		self._context.Scope:Destroy()
+		self.Frame:Destroy()
+	end
+
+	return Label
+end)()
+
+local Library = (function()
+	local Library = {}
+	Library.Version = Constants.Version
+	Library.Theme = ThemeManager.new()
+	Library.Windows = {}
+	Library.Core = {
+		Constants = Constants,
+		Utility = Utility,
+		Animation = Animation,
+		Icons = Icons,
+		Row = Row,
+		Janitor = Janitor,
+		ThemeManager = ThemeManager,
+	}
+	Library._notifications = nil
+
+	Section.RegisterComponent("Toggle", Toggle)
+	Section.RegisterComponent("Dropdown", Dropdown)
+	Section.RegisterComponent("Slider", Slider)
+	Section.RegisterComponent("Button", Button)
+	Section.RegisterComponent("Input", Input)
+	Section.RegisterComponent("Keybind", Keybind)
+	Section.RegisterComponent("Paragraph", Paragraph)
+	Section.RegisterComponent("Label", Label)
+
+	function Library:CreateWindow(config)
+		local window = Window.new(self, config or {})
+		table.insert(self.Windows, window)
+		return window
+	end
+
+	function Library:_removeWindow(window)
+		local index = table.find(self.Windows, window)
+		if index then
+			table.remove(self.Windows, index)
+		end
+	end
+
+	function Library:SetTheme(theme)
+		self.Theme:Set(theme)
+	end
+
+	function Library:GetTheme()
+		return self.Theme:GetName(), self.Theme:GetColors()
+	end
+
+	function Library:GetThemeNames()
+		return self.Theme:GetNames()
+	end
+
+	function Library:RegisterTheme(name, colors)
+		return self.Theme:RegisterTheme(name, colors)
+	end
+
+	function Library:OnThemeChanged(callback)
+		return self.Theme:OnChanged(callback)
+	end
+
+	function Library:Notify(config)
+		if not self._notifications then
+			self._notifications = Notification.new(self.Theme)
+		end
+		return self._notifications:Push(config or {})
+	end
+
+	function Library:RegisterIcon(name, icon)
+		Icons.Register(name, icon)
+	end
+
+	function Library:SetIconsType(iconType)
+		return Icons.SetType(iconType)
+	end
+
+	function Library:RegisterComponent(name, module)
+		assert(type(module) == "table" and type(module.new) == "function", "Component modules must expose a new(section, config) function")
+		Section.RegisterComponent(name, module)
+	end
+
+	function Library:SetFonts(fonts)
+		for key, font in pairs(fonts) do
+			Constants.Fonts[key] = font
+		end
+	end
+
+	function Library:Destroy()
+		for index = #self.Windows, 1, -1 do
+			self.Windows[index]:Destroy()
+		end
+		if self._notifications then
+			self._notifications:Destroy()
+			self._notifications = nil
+		end
+	end
+
+	return Library
+end)()
+
+return Library
